@@ -1,5 +1,5 @@
 class DatasetAdapter:
-    def load(self, source, config):
+    def load(self, source):
         pass
 
 class RepresentationProvider:
