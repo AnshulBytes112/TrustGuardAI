@@ -1,0 +1,101 @@
+Metadata-Version: 2.4
+Name: trustguard-ai
+Version: 0.1.0
+Summary: TrustGuard AI - Explainable training-data security framework
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.100.0
+Requires-Dist: uvicorn>=0.23.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: sqlalchemy>=2.0.0
+Requires-Dist: alembic>=1.11.0
+Requires-Dist: psycopg2-binary>=2.9.0
+Requires-Dist: torch>=2.0.0
+Requires-Dist: transformers>=4.30.0
+Requires-Dist: datasets>=2.14.0
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: pandas>=2.0.0
+Requires-Dist: scikit-learn>=1.3.0
+Requires-Dist: umap-learn>=0.5.0
+Requires-Dist: mlflow>=2.5.0
+Requires-Dist: pytest>=7.4.0
+Requires-Dist: ruff>=0.0.280
+Requires-Dist: black>=23.7.0
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: ruff; extra == "dev"
+Requires-Dist: black; extra == "dev"
+Requires-Dist: pre-commit; extra == "dev"
+
+# TrustGuard AI
+
+TrustGuard AI is an explainable training-data security framework for detecting and purifying potentially poisoned samples in **text training datasets**.
+
+## Current MVP Architecture
+
+The MVP focuses on controlled poisoning of text datasets, DistilBERT representations, and Isolation Forest / K-Means detection of poisoned samples based on multi-layer hidden state analysis inspired by FLARE.
+
+## Technology Stack
+
+- **ML**: Python 3.11, PyTorch, Hugging Face, scikit-learn, UMAP
+- **Backend**: FastAPI, SQLAlchemy, PostgreSQL, MLflow
+- **Frontend**: React, TypeScript, Vite, Tailwind CSS
+
+## Repository Structure
+
+```text
+trustguard-ai/
+├── docs/            # Project documentation and specifications
+├── ml/              # ML pipelines, detection, and models
+├── backend/         # FastAPI backend services
+├── frontend/        # React frontend
+├── configs/         # Research experiment configurations
+├── scripts/         # Utility scripts
+├── tests/           # Automated tests
+├── artifacts/       # Local outputs and logs
+├── docker/          # Dockerfiles
+└── .github/         # CI workflows
+```
+
+## Local Setup
+
+```bash
+# Set up Python environment
+python -m venv .venv
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+pip install -e ".[dev]"
+
+# Set up frontend
+cd frontend
+npm install
+cd ..
+
+# Copy environment template
+cp .env.example .env
+```
+
+## How to start Docker Compose
+
+```bash
+make docker-up
+# or
+docker-compose up -d
+```
+
+## How to run backend tests
+
+```bash
+make test
+# or
+pytest tests/backend tests/ml
+```
+
+## How to run frontend tests
+
+```bash
+make test-frontend
+```
+
+## Current Implementation Status
+
+> This repository currently contains the project foundation. ML detection functionality will be implemented phase-by-phase according to `/docs/01_IMPLEMENTATION_PLAN.md`.
