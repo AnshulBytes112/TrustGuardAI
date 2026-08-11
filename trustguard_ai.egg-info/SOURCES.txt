@@ -11,6 +11,8 @@ backend/services/__init__.py
 ml/__init__.py
 ml/interfaces.py
 ml/data/__init__.py
+ml/data/csv_adapter.py
+ml/data/schemas.py
 ml/detectors/__init__.py
 ml/evaluation/__init__.py
 ml/explainability/__init__.py
