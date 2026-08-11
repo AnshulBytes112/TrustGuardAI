@@ -1,0 +1,1397 @@
+Task 008
+
+# TrustGuard AI — TASK-008: JSONL Dataset Adapter
+
+You are continuing development of TrustGuard AI.
+
+TASK-006 — Canonical Sample Schema and TASK-007 — CSV Dataset Adapter are complete.
+
+Your next task is:
+
+> **TASK-008 — JSONL Dataset Adapter**
+
+The JSONL adapter must produce the exact same canonical `Sample` objects as the CSV adapter.
+
+Do not implement any ML functionality.
+
+---
+
+# 1. Read Before Coding
+
+Read:
+
+1. `docs/00_PROJECT_OVERVIEW.md`
+2. `docs/03_SRS.md`
+3. `docs/04_SYSTEM_ARCHITECTURE.md`
+4. `docs/05_DATA_MODEL_AND_LABEL_SPEC.md`
+5. `docs/06_TEXT_DATASET_SPEC.md`
+6. `docs/21_AI_CODING_RULES.md`
+7. `docs/22_TASK_BREAKDOWN.md`
+8. `docs/23_DEFINITION_OF_DONE.md`
+
+Then inspect:
+
+* `ml/data/schemas.py`
+* `ml/interfaces.py`
+* `ml/data/csv_adapter.py`
+* `tests/ml/data/test_schemas.py`
+* `tests/ml/data/test_csv_adapter.py`
+
+The CSV adapter is the behavioral reference for this task.
+
+---
+
+# 2. Objective
+
+Implement a reusable JSONL adapter:
+
+```text
+JSONL File
+    ↓
+JSONL Dataset Adapter
+    ↓
+Validation / Mapping
+    ↓
+Canonical Sample[]
+```
+
+It must support:
+
+* fully labelled JSONL
+* partially labelled JSONL
+* completely unlabelled JSONL
+* configurable field names
+* explicit sample IDs
+* deterministic generated IDs
+* optional split fields
+* dataset/version metadata
+
+The resulting samples must be indistinguishable from samples loaded through the CSV adapter.
+
+---
+
+# 3. Location
+
+Create:
+
+```text
+ml/data/jsonl_adapter.py
+```
+
+and:
+
+```text
+tests/ml/data/test_jsonl_adapter.py
+```
+
+Reuse existing schemas.
+
+Do not create another `Sample` class.
+
+---
+
+# 4. Configuration
+
+Create a configuration model equivalent in purpose to the CSV adapter.
+
+Conceptually:
+
+```python
+JSONLDatasetAdapterConfig(
+    text_field="text",
+    label_field="label",
+    id_field="id",
+    split_field="split",
+    dataset_id="dataset",
+    dataset_version="v1",
+)
+```
+
+All field mappings except the required metadata must be optional.
+
+The adapter must support custom JSON field names.
+
+Example:
+
+```json
+{"review": "Great movie", "category": "positive"}
+{"review": "Bad movie", "category": "negative"}
+```
+
+with configuration mapping:
+
+```text
+text_field = review
+label_field = category
+```
+
+---
+
+# 5. Required JSONL Format
+
+Each line must contain exactly one JSON object representing one sample.
+
+Example:
+
+```json
+{"id":"1","text":"This movie was excellent","label":"positive"}
+{"id":"2","text":"This movie was terrible","label":"negative"}
+```
+
+Do not support arbitrary nested structures in this task.
+
+If nested-field support is desired later, it should be a separate task.
+
+---
+
+# 6. Labelled JSONL
+
+Input:
+
+```json
+{"id":"1","text":"Excellent movie","label":"positive"}
+{"id":"2","text":"Terrible movie","label":"negative"}
+```
+
+Output:
+
+```text
+label_status = KNOWN
+```
+
+for every sample.
+
+Dataset mode:
+
+```text
+FULLY_LABELLED
+```
+
+---
+
+# 7. Unlabelled JSONL
+
+Input:
+
+```json
+{"id":"1","text":"Excellent movie"}
+{"id":"2","text":"Terrible movie"}
+```
+
+Output:
+
+```text
+label = None
+label_status = UNKNOWN
+```
+
+Dataset mode:
+
+```text
+UNLABELLED
+```
+
+---
+
+# 8. Partially Labelled JSONL
+
+Input:
+
+```json
+{"id":"1","text":"Excellent movie","label":"positive"}
+{"id":"2","text":"Interesting movie"}
+{"id":"3","text":"Terrible movie","label":"negative"}
+```
+
+Output:
+
+```text
+sample 1 → KNOWN
+sample 2 → UNKNOWN
+sample 3 → KNOWN
+```
+
+Dataset mode:
+
+```text
+PARTIALLY_LABELLED
+```
+
+Never discard an unlabelled row.
+
+Never create a fake label.
+
+---
+
+# 9. ID Handling
+
+If the configured ID field exists:
+
+```text
+use explicit ID
+```
+
+Otherwise generate:
+
+```text
+{dataset_id}:{dataset_version}:{row_index}
+```
+
+Use the same deterministic strategy as the CSV adapter.
+
+The same JSONL file loaded twice with the same configuration must produce identical sample IDs.
+
+Test this explicitly.
+
+Reject:
+
+* empty IDs
+* duplicate IDs
+
+Do not use UUID4/random IDs.
+
+---
+
+# 10. Missing Values
+
+Handle JSON `null` correctly.
+
+For labels:
+
+```json
+{"text":"Example","label":null}
+```
+
+must become:
+
+```text
+label = None
+label_status = UNKNOWN
+```
+
+Do not convert `null` into the string:
+
+```text
+"null"
+```
+
+For text:
+
+```json
+{"text":null}
+```
+
+must fail validation.
+
+Whitespace-only text must also fail.
+
+Do not silently drop invalid samples.
+
+---
+
+# 11. Split Handling
+
+If a split field is configured:
+
+```json
+{"text":"Example","split":"train"}
+```
+
+map it to:
+
+```text
+Split.TRAIN
+```
+
+Support case-insensitive values:
+
+```text
+train
+TRAIN
+validation
+VALIDATION
+test
+TEST
+unassigned
+UNASSIGNED
+```
+
+If the split field is absent:
+
+```text
+Split.UNASSIGNED
+```
+
+Unknown values must raise a clear validation error.
+
+Do not create random splits.
+
+---
+
+# 12. Dataset Label Mode
+
+Infer:
+
+```text
+FULLY_LABELLED
+PARTIALLY_LABELLED
+UNLABELLED
+```
+
+using exactly the same semantics as the CSV adapter.
+
+Do not duplicate the inference logic if the repository already has a reusable helper.
+
+Prefer a shared helper if both adapters can use it cleanly.
+
+---
+
+# 13. Poison Ground Truth
+
+Normal JSONL ingestion must set:
+
+```text
+poison_ground_truth = None
+```
+
+Do not automatically read arbitrary fields such as:
+
+```text
+poisoned
+is_poisoned
+poison_ground_truth
+attack
+```
+
+into the canonical poison field.
+
+Controlled poisoning belongs to the dedicated poisoning pipeline.
+
+This prevents evaluation metadata leakage into normal ingestion.
+
+---
+
+# 14. JSON Parsing
+
+Use a standard JSON parser.
+
+Do not implement a custom JSON parser.
+
+The adapter must process JSONL **line by line** rather than requiring the entire file to be loaded into memory.
+
+This is important because JSONL datasets can become large.
+
+Conceptually:
+
+```text
+file
+ ↓
+line 1 → JSON object → Sample
+line 2 → JSON object → Sample
+line 3 → JSON object → Sample
+...
+```
+
+---
+
+# 15. Malformed JSON
+
+Handle malformed lines clearly.
+
+Example:
+
+```text
+{"text":"valid"}
+THIS IS NOT JSON
+{"text":"valid"}
+```
+
+The adapter should report:
+
+* line number
+* parsing failure
+* useful error context
+
+Do not silently skip malformed lines.
+
+For MVP, fail the load rather than partially importing an invalid dataset.
+
+---
+
+# 16. Empty Files
+
+An empty JSONL file must fail with a clear error.
+
+Do not return:
+
+```text
+[]
+```
+
+as if it were a valid dataset.
+
+---
+
+# 17. Non-Object JSON
+
+Reject lines such as:
+
+```json
+["text","label"]
+```
+
+or:
+
+```json
+"hello"
+```
+
+or:
+
+```json
+42
+```
+
+Each JSONL line must represent one JSON object.
+
+---
+
+# 18. Canonical Representation
+
+The JSONL adapter must produce:
+
+```python
+Sample(
+    sample_id=...,
+    text=...,
+    label=...,
+    label_status=...,
+    split=...,
+    dataset_id=...,
+    dataset_version=...,
+    poison_ground_truth=None,
+)
+```
+
+Do not create:
+
+```text
+JSONLSample
+CSVSample
+```
+
+There must remain one canonical sample representation.
+
+---
+
+# 19. Adapter Interface
+
+Use the existing `DatasetAdapter` contract.
+
+Do not modify the interface unless absolutely necessary.
+
+If a modification is necessary:
+
+1. Explain why.
+2. Check all existing implementations/tests.
+3. Make the smallest possible change.
+4. Report the change.
+
+Do not make interface changes simply for stylistic reasons.
+
+---
+
+# 20. Tests
+
+Create focused JSONL tests.
+
+Required:
+
+### Valid
+
+1. Fully labelled JSONL
+2. Unlabelled JSONL
+3. Partially labelled JSONL
+4. Custom field names
+5. Explicit IDs
+6. Deterministic generated IDs
+7. Split handling
+8. Missing split → UNASSIGNED
+9. JSON `null` label
+10. UTF-8 text
+11. Dataset label-mode inference
+12. Multiple JSON objects
+13. Normal ingestion sets poison ground truth to `None`
+
+### Invalid
+
+14. Missing file
+15. Empty file
+16. Malformed JSON
+17. Non-object JSON line
+18. Missing configured text field
+19. Null text
+20. Empty text
+21. Whitespace-only text
+22. Duplicate IDs
+23. Empty ID
+24. Invalid split
+25. Missing dataset ID
+26. Missing dataset version
+
+---
+
+# 21. Determinism
+
+Explicitly test:
+
+```text
+load JSONL
+    ↓
+IDs A
+
+load same JSONL again
+    ↓
+IDs B
+```
+
+Assert:
+
+```text
+A == B
+```
+
+---
+
+# 22. CSV/JSONL Behavioral Parity
+
+Create at least one test proving that equivalent CSV and JSONL representations produce equivalent canonical sample data.
+
+For example:
+
+CSV:
+
+```csv
+id,text,label
+1,"Great movie",positive
+2,"Bad movie",negative
+```
+
+JSONL:
+
+```json
+{"id":"1","text":"Great movie","label":"positive"}
+{"id":"2","text":"Bad movie","label":"negative"}
+```
+
+The resulting canonical fields should match.
+
+This is important because downstream ML code must not care whether the dataset came from CSV or JSONL.
+
+---
+
+# 23. Do Not Implement
+
+Do NOT implement:
+
+* Hugging Face dataset adapter
+* poisoning
+* DistilBERT
+* tokenization
+* embeddings
+* Isolation Forest
+* K-Means
+* FLARE
+* risk scoring
+* purification
+* FastAPI endpoints
+* PostgreSQL persistence
+* frontend changes
+* GNN/GAT
+* image support
+
+---
+
+# 24. Test Commands
+
+First run:
+
+```bash
+pytest
+```
+
+from the repository root.
+
+Then:
+
+```bash
+ruff check .
+```
+
+Do NOT automatically use:
+
+```bash
+ruff check . --fix
+```
+
+If errors appear, inspect and fix only task-related issues.
+
+If the existing repository-wide pytest import/path issue still exists, investigate the root cause rather than hiding it with custom `sys.path` manipulation.
+
+The goal is that the normal command:
+
+```bash
+pytest
+```
+
+works from the repository root.
+
+---
+
+# 25. Acceptance Criteria
+
+TASK-008 is complete only when:
+
+* [ ] JSONL adapter exists
+* [ ] canonical `Sample` reused
+* [ ] labelled JSONL supported
+* [ ] unlabelled JSONL supported
+* [ ] partially labelled JSONL supported
+* [ ] custom fields supported
+* [ ] explicit IDs supported
+* [ ] generated IDs deterministic
+* [ ] duplicate IDs rejected
+* [ ] malformed JSON rejected
+* [ ] non-object JSON rejected
+* [ ] missing values handled correctly
+* [ ] split mapping works
+* [ ] label mode inferred correctly
+* [ ] poison ground truth remains `None`
+* [ ] JSONL is processed line-by-line
+* [ ] CSV/JSONL behavioral parity test exists
+* [ ] repository-wide `pytest` works
+* [ ] Ruff passes
+* [ ] no unrelated features implemented
+
+---
+
+# 26. Final Response
+
+When finished, report:
+
+## Implemented
+
+What was added.
+
+## Files Changed
+
+Every changed file.
+
+## Tests
+
+Commands executed and results.
+
+## CSV/JSONL Parity
+
+Explain the parity test result.
+
+## Test Infrastructure
+
+State whether plain repository-root `pytest` works.
+
+## Documentation Changes
+
+Any changes.
+
+## Deviations
+
+Any deviation from the specification.
+
+## Next Task
+
+Recommend only:
+
+
+
+> `TASK-009 — Label Availability Handling`
+
+Do not implement TASK-009 automatically.
+
+
+
+Task-009
+
+# TrustGuard AI — TASK-009: Label Availability Handling
+
+You are continuing development of TrustGuard AI.
+
+TASK-006 — Canonical Sample Schema, TASK-007 — CSV Dataset Adapter, and TASK-008 — JSONL Dataset Adapter are complete.
+
+The repository Python package/import configuration has also been fixed so that:
+
+```bash
+pytest
+```
+
+works from the repository root.
+
+Your next task is:
+
+> **TASK-009 — Label Availability Handling**
+
+This task establishes the reusable logic for handling fully labelled, partially labelled, and completely unlabelled datasets.
+
+Do not implement poisoning, Transformer models, feature extraction, anomaly detection, or any other future task.
+
+---
+
+# 1. Read Before Coding
+
+Read:
+
+1. `docs/00_PROJECT_OVERVIEW.md`
+2. `docs/03_SRS.md`
+3. `docs/04_SYSTEM_ARCHITECTURE.md`
+4. `docs/05_DATA_MODEL_AND_LABEL_SPEC.md`
+5. `docs/06_TEXT_DATASET_SPEC.md`
+6. `docs/21_AI_CODING_RULES.md`
+7. `docs/22_TASK_BREAKDOWN.md`
+8. `docs/23_DEFINITION_OF_DONE.md`
+
+Inspect the existing implementation:
+
+```text
+ml/data/schemas.py
+ml/data/csv_adapter.py
+ml/data/jsonl_adapter.py
+ml/interfaces.py
+tests/ml/data/
+```
+
+Use the existing canonical `Sample` and `DatasetLabelMode`.
+
+Do not create duplicate enums or sample models.
+
+---
+
+# 2. Objective
+
+Create a reusable label-availability component that answers:
+
+> What level of class-label availability does this dataset have?
+
+Supported modes:
+
+```text
+FULLY_LABELLED
+PARTIALLY_LABELLED
+UNLABELLED
+```
+
+The logic must be independent of:
+
+* CSV
+* JSONL
+* PyTorch
+* Transformers
+* FastAPI
+* PostgreSQL
+* poisoning
+* anomaly detection
+
+It operates on canonical `Sample` objects.
+
+---
+
+# 3. Core Semantics
+
+The only source of truth for class-label availability is:
+
+```text
+Sample.label_status
+```
+
+Do NOT infer label availability from:
+
+```text
+poison_ground_truth
+```
+
+Do NOT infer it from:
+
+```text
+label is None
+```
+
+when `label_status` already explicitly defines the state.
+
+The canonical schema remains the source of truth.
+
+---
+
+# 4. Required Helper
+
+Implement a reusable function, for example:
+
+```python
+infer_label_mode(samples) -> DatasetLabelMode
+```
+
+The exact module location should follow the existing architecture.
+
+A reasonable location is:
+
+```text
+ml/data/label_handling.py
+```
+
+but inspect the repository before deciding.
+
+Do not introduce unnecessary abstraction.
+
+---
+
+# 5. Required Behaviour
+
+## Fully Labelled
+
+Input:
+
+```text id="w9l7sl"
+KNOWN
+KNOWN
+KNOWN
+KNOWN
+```
+
+Output:
+
+```text id="7jyv0w"
+DatasetLabelMode.FULLY_LABELLED
+```
+
+---
+
+## Unlabelled
+
+Input:
+
+```text id="c5q1ji"
+UNKNOWN
+UNKNOWN
+UNKNOWN
+UNKNOWN
+```
+
+Output:
+
+```text id="7o5w4r"
+DatasetLabelMode.UNLABELLED
+```
+
+---
+
+## Partially Labelled
+
+Input:
+
+```text id="n0l8mg"
+KNOWN
+UNKNOWN
+KNOWN
+UNKNOWN
+```
+
+Output:
+
+```text id="ahxk4f"
+DatasetLabelMode.PARTIALLY_LABELLED
+```
+
+---
+
+# 6. Empty Dataset
+
+An empty collection is not a meaningful labelled/unlabelled dataset.
+
+Do NOT silently classify:
+
+```text id="d0a7kf"
+[]
+```
+
+as:
+
+```text id="v4x4cc"
+UNLABELLED
+```
+
+Raise a clear validation/domain error such as:
+
+```text EmptyDatasetError
+```
+
+or an equivalent existing project error.
+
+Do not create a new exception hierarchy unless necessary.
+
+---
+
+# 7. Invalid Sample States
+
+The canonical schema should already prevent invalid combinations.
+
+However, the label-handling layer must not silently reinterpret malformed objects.
+
+If a sample has an invalid `label_status`, fail clearly.
+
+Do not attempt to "guess" the intended state.
+
+---
+
+# 8. Dataset-Level Statistics
+
+In addition to the label mode, implement a small reusable statistics result if it fits naturally into the architecture.
+
+For example:
+
+```python
+LabelAvailabilityStats(
+    total_samples=1000,
+    labelled_samples=800,
+    unlabelled_samples=200,
+    label_mode=DatasetLabelMode.PARTIALLY_LABELLED,
+)
+```
+
+Required fields:
+
+```text
+total_samples
+labelled_samples
+unlabelled_samples
+label_mode
+```
+
+Do not add unnecessary metrics.
+
+The statistics must satisfy:
+
+```text
+labelled_samples + unlabelled_samples == total_samples
+```
+
+---
+
+# 9. Percentage Statistics
+
+Do NOT store percentages as primary data.
+
+If a helper is useful, expose calculated properties such as:
+
+```text
+labelled_percentage
+unlabelled_percentage
+```
+
+Calculate them from counts.
+
+For example:
+
+```text
+800 / 1000 = 80%
+200 / 1000 = 20%
+```
+
+For an empty dataset, percentages must never cause division-by-zero because empty datasets are rejected.
+
+---
+
+# 10. Adapter Integration
+
+CSV and JSONL adapters currently infer label mode.
+
+Refactor them to use the shared label-handling implementation where appropriate.
+
+The goal is:
+
+```text
+CSV Adapter
+     ↓
+Canonical Samples
+     ↓
+Shared Label Handler
+```
+
+and:
+
+```text
+JSONL Adapter
+     ↓
+Canonical Samples
+     ↓
+Shared Label Handler
+```
+
+There must be only **one implementation of the label-mode rules**.
+
+Do not duplicate:
+
+```python
+if known == total:
+    ...
+elif known == 0:
+    ...
+else:
+    ...
+```
+
+in multiple adapters.
+
+---
+
+# 11. Important Semantic Separation
+
+Maintain these independent concepts:
+
+```text id="j8s8qf"
+                  Dataset
+                     │
+          ┌──────────┴──────────┐
+          │                     │
+   Class-label state      Poison state
+          │                     │
+   KNOWN / UNKNOWN        TRUE / FALSE / UNKNOWN
+```
+
+Example:
+
+```text id="x6l7qk"
+label_status = UNKNOWN
+poison_ground_truth = TRUE
+```
+
+is valid.
+
+This means:
+
+> The class label is unavailable, but controlled experiment ground truth says the sample is poisoned.
+
+This must remain representable.
+
+---
+
+# 12. No Pseudo-Labels
+
+Do NOT implement pseudo-labelling.
+
+Do NOT infer labels using:
+
+* model predictions
+* clustering
+* nearest neighbours
+* heuristics
+* keyword matching
+
+This task only determines whether labels are available.
+
+Pseudo-labelling, semi-supervised learning, and model-based label inference are outside the current scope.
+
+---
+
+# 13. No Label Cleaning
+
+Do not modify:
+
+```text
+Sample.label
+```
+
+Do not:
+
+* normalize class names
+* merge classes
+* infer missing labels
+* convert labels to integers
+* encode labels
+
+The label-handling module only determines availability.
+
+---
+
+# 14. Tests
+
+Create:
+
+```text
+tests/ml/data/test_label_handling.py
+```
+
+Test at minimum:
+
+### Mode inference
+
+1. All samples `KNOWN`
+2. All samples `UNKNOWN`
+3. Mixture of `KNOWN` and `UNKNOWN`
+4. Empty dataset
+5. Single labelled sample
+6. Single unlabelled sample
+
+### Statistics
+
+7. Correct total count
+8. Correct labelled count
+9. Correct unlabelled count
+10. Counts sum to total
+11. Correct label mode
+12. Correct percentages
+
+### Semantic separation
+
+13. Poisoned + known label
+14. Poisoned + unknown label
+15. Clean + unknown poison status
+
+The label handler must not inspect poison ground truth.
+
+---
+
+# 15. Adapter Regression Tests
+
+Run the existing CSV and JSONL tests.
+
+Confirm:
+
+```text
+CSV label mode == shared label handler result
+JSONL label mode == shared label handler result
+```
+
+For equivalent datasets:
+
+```text
+CSV → samples
+JSONL → samples
+```
+
+the resulting label statistics should match.
+
+---
+
+# 16. Test Empty Dataset
+
+Explicitly test that:
+
+```python
+infer_label_mode([])
+```
+
+fails clearly.
+
+Also test the statistics helper if implemented.
+
+---
+
+# 17. Property/Invariant Tests
+
+At minimum verify:
+
+```text
+labelled_count + unlabelled_count == total_count
+```
+
+for multiple dataset compositions.
+
+Also verify:
+
+```text
+FULLY_LABELLED → unlabelled_count == 0
+UNLABELLED → labelled_count == 0
+PARTIALLY_LABELLED → labelled_count > 0 and unlabelled_count > 0
+```
+
+---
+
+# 18. Architecture Constraints
+
+The label-handling module must NOT import:
+
+```text
+torch
+transformers
+sklearn
+fastapi
+sqlalchemy
+```
+
+Keep it a pure data/domain utility.
+
+It should be straightforward to unit-test without GPU, database, or network access.
+
+---
+
+# 19. Error Handling
+
+Use a clear domain-level error for empty datasets.
+
+Do not catch exceptions and silently return a default mode.
+
+Bad input should fail loudly.
+
+Do not use:
+
+```python
+except Exception:
+    return DatasetLabelMode.UNLABELLED
+```
+
+or similar behaviour.
+
+---
+
+# 20. Documentation
+
+If the implementation clarifies the semantics in a way useful to future developers, update:
+
+```text
+docs/05_DATA_MODEL_AND_LABEL_SPEC.md
+```
+
+only if necessary.
+
+Do not rewrite the documentation unnecessarily.
+
+If no documentation changes are required, report:
+
+```text
+No documentation changes required.
+```
+
+---
+
+# 21. Quality Checks
+
+Run from the repository root:
+
+```bash
+pytest
+```
+
+Then:
+
+```bash
+ruff check .
+```
+
+Do NOT automatically run:
+
+```bash
+ruff check . --fix
+```
+
+If Ruff finds an issue:
+
+1. inspect it,
+2. fix only the relevant issue,
+3. rerun Ruff.
+
+Also verify the existing CSV and JSONL tests remain green.
+
+---
+
+# 22. Do Not Implement
+
+Do NOT implement:
+
+* poisoning
+* backdoor attacks
+* DistilBERT
+* tokenization
+* embeddings
+* Isolation Forest
+* K-Means
+* FLARE
+* risk scoring
+* explainability
+* purification
+* retraining
+* FastAPI endpoints
+* PostgreSQL persistence
+* React changes
+* GNN/GAT
+* image support
+* pseudo-labelling
+
+This task is purely about label availability.
+
+---
+
+# 23. Acceptance Criteria
+
+TASK-009 is complete only when:
+
+* [ ] Shared label-mode inference exists
+* [ ] Fully labelled datasets are correctly identified
+* [ ] Unlabelled datasets are correctly identified
+* [ ] Partially labelled datasets are correctly identified
+* [ ] Empty datasets fail clearly
+* [ ] Dataset label statistics exist if implemented
+* [ ] Counts are correct
+* [ ] Percentages are correct
+* [ ] CSV adapter uses shared logic
+* [ ] JSONL adapter uses shared logic
+* [ ] No duplicate label-mode logic remains in adapters
+* [ ] Poison ground truth is completely ignored
+* [ ] No pseudo-labelling exists
+* [ ] Tests pass
+* [ ] Repository-wide `pytest` passes
+* [ ] `ruff check .` passes
+* [ ] No unrelated functionality is implemented
+
+---
+
+# 24. Final Response
+
+After implementation, report:
+
+## Implemented
+
+What was added.
+
+## Shared Logic
+
+Explain where the label-handling logic lives and how CSV/JSONL use it.
+
+## Statistics
+
+Describe the dataset statistics available.
+
+## Tests
+
+Commands executed and results.
+
+## Regression
+
+Confirm CSV and JSONL tests still pass.
+
+## Documentation
+
+Any changes.
+
+## Deviations
+
+Any deviations from the specification.
+
+## Next Task
+
+Recommend only:
+
+> `TASK-010 — Dataset Versioning Metadata`
+
+Do not implement TASK-010 automatically.
+
+
+
+Task-010
+
