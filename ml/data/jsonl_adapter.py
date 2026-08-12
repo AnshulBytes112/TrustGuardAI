@@ -2,9 +2,9 @@ import json
 import os
 from dataclasses import dataclass
 
+from ml.data.label_handling import infer_label_mode
 from ml.data.schemas import (
     DatasetImportResult,
-    DatasetLabelMode,
     LabelStatus,
     Sample,
     Split,
@@ -35,8 +35,6 @@ class JSONLDatasetAdapter(DatasetAdapter):
             raise ValueError("Empty dataset file")
 
         samples = []
-        has_known_labels = False
-        has_unknown_labels = False
         seen_ids = set()
 
         with open(source, "r", encoding="utf-8") as f:
@@ -92,11 +90,6 @@ class JSONLDatasetAdapter(DatasetAdapter):
                         label = label_val
                         label_status = LabelStatus.KNOWN
 
-                if label_status == LabelStatus.KNOWN:
-                    has_known_labels = True
-                else:
-                    has_unknown_labels = True
-
                 # Handle split
                 split = Split.UNASSIGNED
                 if self.config.split_field and self.config.split_field in obj:
@@ -120,13 +113,7 @@ class JSONLDatasetAdapter(DatasetAdapter):
                 )
                 samples.append(sample)
 
-        # Replicate dataset inference logic
-        if has_known_labels and has_unknown_labels:
-            label_mode = DatasetLabelMode.PARTIALLY_LABELLED
-        elif has_known_labels:
-            label_mode = DatasetLabelMode.FULLY_LABELLED
-        else:
-            label_mode = DatasetLabelMode.UNLABELLED
+        label_mode = infer_label_mode(samples).label_mode
 
         return DatasetImportResult(
             samples=samples,

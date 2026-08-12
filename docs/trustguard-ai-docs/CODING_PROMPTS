@@ -1395,3 +1395,912 @@ Do not implement TASK-010 automatically.
 
 Task-010
 
+# TrustGuard AI — TASK-010: Dataset Versioning Metadata
+
+You are continuing development of TrustGuard AI.
+
+TASK-006 — Canonical Sample Schema, TASK-007 — CSV Dataset Adapter, TASK-008 — JSONL Dataset Adapter, and TASK-009 — Label Availability Handling are complete.
+
+Current repository status:
+
+* Canonical `Sample` schema exists.
+* CSV ingestion works.
+* JSONL ingestion works.
+* Fully labelled, partially labelled, and unlabelled datasets are supported.
+* Shared label-availability logic exists.
+* Repository-wide `pytest` passes.
+* Ruff passes.
+
+Your next task is:
+
+> **TASK-010 — Dataset Versioning Metadata**
+
+This task establishes a clean, reproducible, immutable dataset-version metadata model before the project moves into controlled poisoning.
+
+Do not implement poisoning or ML functionality in this task.
+
+---
+
+# 1. Read Before Coding
+
+Read:
+
+1. `docs/00_PROJECT_OVERVIEW.md`
+2. `docs/03_SRS.md`
+3. `docs/04_SYSTEM_ARCHITECTURE.md`
+4. `docs/05_DATA_MODEL_AND_LABEL_SPEC.md`
+5. `docs/06_TEXT_DATASET_SPEC.md`
+6. `docs/07_POISONING_SPEC.md`
+7. `docs/14_PURIFICATION_SPEC.md`
+8. `docs/15_EVALUATION_PROTOCOL.md`
+9. `docs/21_AI_CODING_RULES.md`
+10. `docs/22_TASK_BREAKDOWN.md`
+11. `docs/23_DEFINITION_OF_DONE.md`
+
+Inspect:
+
+```text
+ml/data/schemas.py
+ml/data/csv_adapter.py
+ml/data/jsonl_adapter.py
+ml/data/label_handling.py
+tests/ml/data/
+```
+
+Reuse existing models and utilities.
+
+Do not duplicate `Sample`, `DatasetLabelMode`, `LabelStatus`, or `Split`.
+
+---
+
+# 2. Objective
+
+Create a dataset-version metadata model that allows every dataset used by TrustGuard AI to be:
+
+* uniquely identified
+* versioned
+* traced to its source
+* associated with its modality
+* associated with label availability
+* associated with preprocessing/configuration
+* associated with poisoning configuration when applicable
+* reproduced later
+
+The core relationship must be:
+
+```text
+Dataset
+   ↓
+Dataset Version
+   ↓
+Samples
+```
+
+A dataset version is an immutable snapshot/reference.
+
+---
+
+# 3. Important Distinction
+
+Do not confuse:
+
+```text
+dataset_id
+```
+
+with:
+
+```text
+dataset_version
+```
+
+Example:
+
+```text
+dataset_id = imdb
+```
+
+Versions:
+
+```text
+imdb:v1
+imdb:v2
+imdb:poisoned-v1
+imdb:purified-v1
+```
+
+The same logical dataset may have many versions.
+
+---
+
+# 4. Dataset Version Model
+
+Create a domain-level model such as:
+
+```python
+DatasetVersion
+```
+
+Use Pydantic or an appropriate existing project convention.
+
+Minimum conceptual fields:
+
+```text
+dataset_id
+version
+modality
+label_mode
+source
+created_at
+preprocessing_version
+poisoning_config
+parent_version
+artifact_uri
+```
+
+Use appropriate types and optionality.
+
+Do not add fields simply for completeness.
+
+---
+
+# 5. Required Fields
+
+## dataset_id
+
+Required stable logical dataset identifier.
+
+Example:
+
+```text
+imdb
+```
+
+Must not be empty.
+
+---
+
+## version
+
+Required immutable version identifier.
+
+Examples:
+
+```text
+v1
+v2
+poisoned-v1
+purified-v1
+```
+
+Do not automatically impose semantic versioning such as:
+
+```text
+1.0.0
+```
+
+unless required by existing project conventions.
+
+---
+
+## modality
+
+Create or reuse an appropriate modality enum.
+
+For the current MVP:
+
+```text
+TEXT
+```
+
+The architecture should permit:
+
+```text
+IMAGE
+```
+
+later, but image processing is not part of this task.
+
+Do not implement image functionality.
+
+---
+
+## label_mode
+
+Reuse:
+
+```text
+DatasetLabelMode
+```
+
+from TASK-009.
+
+Possible values:
+
+```text
+FULLY_LABELLED
+PARTIALLY_LABELLED
+UNLABELLED
+```
+
+Do not create a second label-mode enum.
+
+---
+
+## source
+
+Identify where the dataset came from.
+
+Examples:
+
+```text
+local_csv
+local_jsonl
+huggingface
+generated
+```
+
+Keep this as metadata.
+
+Do not implement Hugging Face ingestion in this task.
+
+---
+
+## created_at
+
+Record when this dataset version was created.
+
+Use a timezone-aware datetime.
+
+Do not use naive local timestamps.
+
+---
+
+# 6. Preprocessing Version
+
+Add:
+
+```text
+preprocessing_version
+```
+
+This identifies the preprocessing logic/configuration used to create the dataset version.
+
+Example:
+
+```text
+raw-v1
+text-normalization-v1
+```
+
+Do not implement preprocessing pipelines.
+
+The purpose is traceability.
+
+---
+
+# 7. Parent Version
+
+Add:
+
+```text
+parent_version
+```
+
+Optional.
+
+This allows lineage such as:
+
+```text
+imdb:v1
+    ↓
+imdb:poisoned-v1
+```
+
+and:
+
+```text
+imdb:poisoned-v1
+    ↓
+imdb:purified-v1
+```
+
+For original datasets:
+
+```text
+parent_version = None
+```
+
+Do not permit self-parenting such as:
+
+```text
+version = v1
+parent_version = v1
+```
+
+Validate this.
+
+---
+
+# 8. Artifact URI
+
+Add:
+
+```text
+artifact_uri
+```
+
+Optional for the current local implementation.
+
+Examples:
+
+```text
+artifacts/datasets/imdb/v1.jsonl
+```
+
+or:
+
+```text
+s3://bucket/path
+```
+
+Do not implement S3.
+
+This field only identifies where the actual dataset artifact is stored.
+
+---
+
+# 9. Dataset Integrity
+
+Add a checksum field if it fits naturally into the model:
+
+```text
+checksum
+```
+
+Use it to identify the exact dataset artifact.
+
+Preferred approach:
+
+```text
+SHA-256
+```
+
+The checksum must represent the stored dataset artifact, not an arbitrary in-memory Python object.
+
+Do not calculate expensive checksums unless an actual artifact exists.
+
+For metadata-only records, checksum may remain `None`.
+
+---
+
+# 10. Poisoning Metadata
+
+The dataset-version model may contain optional poisoning metadata.
+
+However:
+
+### IMPORTANT
+
+Do not put individual sample poison ground truth into the dataset metadata.
+
+These are different:
+
+```text
+DatasetVersion.poisoning_config
+```
+
+and:
+
+```text
+Sample.poison_ground_truth
+```
+
+The first describes the controlled experiment configuration.
+
+The second describes the known state of an individual sample.
+
+---
+
+# 11. Poisoning Config Structure
+
+Create a small metadata model if appropriate:
+
+```python
+PoisoningConfig
+```
+
+Conceptually:
+
+```text
+attack_type
+poison_rate
+seed
+trigger_identifier
+target_label
+```
+
+Keep it configuration metadata only.
+
+Do NOT implement the attack.
+
+Do NOT generate poisoned samples.
+
+Do NOT store actual trigger text unnecessarily in this task.
+
+If the existing poisoning specification requires the exact trigger later, the poisoning task can define the appropriate storage mechanism.
+
+For now, this model should support the metadata needed for reproducibility.
+
+---
+
+# 12. Dataset Lineage
+
+The model should make it possible to represent:
+
+```text
+Original
+   │
+   ├── Poisoned
+   │       │
+   │       └── Purified
+   │
+   └── Another experiment version
+```
+
+Example:
+
+```text
+imdb:v1
+```
+
+then:
+
+```text
+imdb:poisoned-v1
+parent_version = v1
+```
+
+then:
+
+```text
+imdb:purified-v1
+parent_version = poisoned-v1
+```
+
+Do not implement the purification engine now.
+
+Only make the metadata capable of representing lineage.
+
+---
+
+# 13. Immutability
+
+Dataset versions are logically immutable.
+
+Once created:
+
+```text
+dataset_id + version
+```
+
+must identify one fixed dataset state.
+
+Do not implement database immutability yet.
+
+At the domain-model level:
+
+* do not provide mutation helpers
+* do not silently overwrite version metadata
+* creating a changed dataset should result in a new version
+
+---
+
+# 14. Dataset Version Validation
+
+Validate at least:
+
+### Invalid
+
+* empty dataset ID
+* empty version
+* invalid modality
+* invalid label mode
+* naive `created_at`
+* self-parent
+* empty preprocessing version
+* invalid poison rate
+* poison rate outside `[0, 1]`
+
+### Valid
+
+* original dataset with no parent
+* derived dataset with parent
+* clean dataset with no poisoning config
+* poisoned dataset with poisoning config
+* text dataset
+* all three label modes
+
+---
+
+# 15. Poison Rate
+
+If `poison_rate` is represented:
+
+```text
+0 <= poison_rate <= 1
+```
+
+Examples:
+
+```text
+0.01
+0.05
+0.10
+```
+
+are valid.
+
+These are invalid:
+
+```text
+-0.1
+1.5
+```
+
+Do not convert:
+
+```text
+5
+```
+
+to:
+
+```text
+0.05
+```
+
+Silently.
+
+Configuration should explicitly use the `[0,1]` representation.
+
+---
+
+# 16. Seed
+
+If poisoning metadata includes:
+
+```text
+seed
+```
+
+it must be an integer.
+
+Do not generate a random seed automatically.
+
+The controlled poisoning task will explicitly configure the seed.
+
+---
+
+# 17. Label Mode Integration
+
+Dataset version metadata must use the result from TASK-009.
+
+For example:
+
+```text
+CSV Adapter
+    ↓
+Samples
+    ↓
+infer_label_mode()
+    ↓
+DatasetVersion.label_mode
+```
+
+Do not recalculate label mode using different logic.
+
+---
+
+# 18. Sample Traceability
+
+Every `Sample` already contains:
+
+```text
+dataset_id
+dataset_version
+```
+
+The new DatasetVersion model must use the same identifiers.
+
+The following must remain consistent:
+
+```text
+Sample.dataset_id == DatasetVersion.dataset_id
+```
+
+and:
+
+```text
+Sample.dataset_version == DatasetVersion.version
+```
+
+Do not automatically mutate samples to make them match.
+
+---
+
+# 19. Dataset Version ID
+
+If useful, expose a computed identifier:
+
+```text
+dataset_version_id
+```
+
+For example:
+
+```text
+imdb:v1
+```
+
+Do not store redundant identifiers unless the architecture benefits from it.
+
+Prefer a computed property.
+
+---
+
+# 20. Serialization
+
+The model must support:
+
+```text
+DatasetVersion
+     ↕
+dict / JSON
+```
+
+Serialization must preserve:
+
+* dataset ID
+* version
+* modality
+* label mode
+* source
+* timestamps
+* lineage
+* preprocessing version
+* poisoning metadata
+* artifact URI
+* checksum
+
+Test round-trip serialization.
+
+---
+
+# 21. No Database Yet
+
+Do NOT implement:
+
+* PostgreSQL tables
+* SQLAlchemy model
+* Alembic migration
+* repository persistence
+* CRUD API
+
+Those belong to the backend/database phase.
+
+This task is only the domain/data contract.
+
+---
+
+# 22. No ML Yet
+
+Do NOT implement:
+
+* poisoning
+* backdoor generation
+* DistilBERT
+* tokenization
+* embeddings
+* Isolation Forest
+* K-Means
+* FLARE
+* risk scoring
+* purification
+* retraining
+* GNN/GAT
+* images
+
+---
+
+# 23. Tests
+
+Create:
+
+```text
+tests/ml/data/test_dataset_version.py
+```
+
+Test at minimum:
+
+### Valid
+
+1. Original text dataset
+2. Fully labelled dataset
+3. Partially labelled dataset
+4. Unlabelled dataset
+5. Derived dataset with parent
+6. Poisoning metadata
+7. Valid poison rates
+8. Artifact URI
+9. Checksum
+10. Timezone-aware timestamp
+11. Serialization/deserialization
+12. Computed dataset version ID
+
+### Invalid
+
+13. Empty dataset ID
+14. Empty version
+15. Invalid modality
+16. Invalid label mode
+17. Naive datetime
+18. Self-parent
+19. Empty preprocessing version
+20. Negative poison rate
+21. Poison rate > 1
+22. Non-integer seed
+
+---
+
+# 24. Integration Tests
+
+Add tests proving that dataset version metadata is compatible with canonical samples.
+
+For example:
+
+```text
+DatasetVersion:
+    dataset_id = imdb
+    version = v1
+
+Sample:
+    dataset_id = imdb
+    dataset_version = v1
+```
+
+These should be compatible.
+
+Also test that mismatched identifiers can be detected by a small validation/helper if the architecture naturally supports it.
+
+Do not silently rewrite either side.
+
+---
+
+# 25. Existing Tests
+
+Run the complete repository test suite:
+
+```bash
+pytest
+```
+
+Then:
+
+```bash
+ruff check .
+```
+
+Do not use:
+
+```bash
+ruff check . --fix
+```
+
+unless a specific formatting correction is required and you have inspected the changes.
+
+All existing CSV, JSONL, schema, and label-handling tests must remain green.
+
+---
+
+# 26. Documentation
+
+If necessary, update:
+
+```text
+docs/05_DATA_MODEL_AND_LABEL_SPEC.md
+```
+
+and/or:
+
+```text
+docs/06_TEXT_DATASET_SPEC.md
+```
+
+with the final DatasetVersion semantics.
+
+Do not rewrite unrelated documentation.
+
+If the existing docs already fully describe the implementation, report:
+
+```text
+No documentation changes required.
+```
+
+---
+
+# 27. Acceptance Criteria
+
+TASK-010 is complete only when:
+
+* [ ] DatasetVersion domain model exists
+* [ ] dataset ID supported
+* [ ] version supported
+* [ ] modality supported
+* [ ] existing DatasetLabelMode reused
+* [ ] source supported
+* [ ] timezone-aware created_at supported
+* [ ] preprocessing version supported
+* [ ] parent version supported
+* [ ] self-parent rejected
+* [ ] artifact URI supported
+* [ ] checksum supported if implemented
+* [ ] poisoning metadata supported without implementing poisoning
+* [ ] poison rate validation works
+* [ ] seed validation works
+* [ ] dataset lineage is representable
+* [ ] serialization round-trip works
+* [ ] sample/version identity remains consistent
+* [ ] no database implementation added
+* [ ] no ML implementation added
+* [ ] all tests pass
+* [ ] `ruff check .` passes
+* [ ] no unrelated files changed
+
+---
+
+# 28. Final Response
+
+After implementation, report:
+
+## Implemented
+
+What was added.
+
+## Dataset Version Model
+
+Explain the fields and their purpose.
+
+## Lineage
+
+Explain how original → poisoned → purified versions can be represented.
+
+## Poisoning Metadata
+
+Explain what is stored now and what is intentionally deferred to the poisoning task.
+
+## Tests
+
+Commands executed and results.
+
+## Regression
+
+Confirm all existing tests remain green.
+
+## Documentation
+
+Any changes.
+
+## Deviations
+
+Any deviations from the specification.
+
+## Next Task
+
+Recommend only:
+
+> `TASK-011 — Controlled Text Poisoning Engine`
+
+Do not implement TASK-011 automatically.
+
+

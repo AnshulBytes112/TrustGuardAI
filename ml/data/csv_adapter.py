@@ -3,9 +3,9 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from ml.data.label_handling import infer_label_mode
 from ml.data.schemas import (
     DatasetImportResult,
-    DatasetLabelMode,
     LabelStatus,
     Sample,
     Split,
@@ -41,8 +41,6 @@ class CSVDatasetAdapter(DatasetAdapter):
             raise ValueError(f"Configured ID column '{self.config.id_column}' not found")
 
         samples = []
-        has_known_labels = False
-        has_unknown_labels = False
 
         seen_ids = set()
 
@@ -75,11 +73,6 @@ class CSVDatasetAdapter(DatasetAdapter):
                     label = label_val
                     label_status = LabelStatus.KNOWN
 
-            if label_status == LabelStatus.KNOWN:
-                has_known_labels = True
-            else:
-                has_unknown_labels = True
-
             # Handle split
             split = Split.UNASSIGNED
             if self.config.split_column and self.config.split_column in df.columns:
@@ -103,12 +96,7 @@ class CSVDatasetAdapter(DatasetAdapter):
             )
             samples.append(sample)
         
-        if has_known_labels and has_unknown_labels:
-            label_mode = DatasetLabelMode.PARTIALLY_LABELLED
-        elif has_known_labels:
-            label_mode = DatasetLabelMode.FULLY_LABELLED
-        else:
-            label_mode = DatasetLabelMode.UNLABELLED
+        label_mode = infer_label_mode(samples).label_mode
 
         return DatasetImportResult(
             samples=samples,
