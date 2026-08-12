@@ -4,7 +4,6 @@ backend/__init__.py
 backend/main.py
 backend/api/__init__.py
 backend/core/__init__.py
-backend/models/__init__.py
 backend/repositories/__init__.py
 backend/schemas/__init__.py
 backend/services/__init__.py
@@ -12,12 +11,12 @@ ml/__init__.py
 ml/interfaces.py
 ml/data/__init__.py
 ml/data/csv_adapter.py
+ml/data/jsonl_adapter.py
 ml/data/schemas.py
 ml/detectors/__init__.py
 ml/evaluation/__init__.py
 ml/explainability/__init__.py
 ml/features/__init__.py
-ml/models/__init__.py
 ml/poisoning/__init__.py
 ml/purification/__init__.py
 ml/scoring/__init__.py

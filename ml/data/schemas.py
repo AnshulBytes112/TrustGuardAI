@@ -40,3 +40,13 @@ class Sample(BaseModel):
             raise ValueError("label_status cannot be KNOWN when label is None")
 
         return self
+
+
+from dataclasses import dataclass
+
+
+@dataclass
+class DatasetImportResult:
+    samples: list[Sample]
+    label_mode: DatasetLabelMode
+    total_samples: int
