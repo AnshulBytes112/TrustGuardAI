@@ -3,7 +3,13 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from ml.data.schemas import DatasetLabelMode, LabelStatus, Sample, Split
+from ml.data.schemas import (
+    DatasetImportResult,
+    DatasetLabelMode,
+    LabelStatus,
+    Sample,
+    Split,
+)
 from ml.interfaces import DatasetAdapter
 
 
@@ -15,12 +21,6 @@ class CSVDatasetAdapterConfig:
     label_column: str = "label"
     id_column: str | None = None
     split_column: str | None = None
-
-@dataclass
-class DatasetImportResult:
-    samples: list[Sample]
-    label_mode: DatasetLabelMode
-    total_samples: int
 
 class CSVDatasetAdapter(DatasetAdapter):
     def __init__(self, config: CSVDatasetAdapterConfig):
