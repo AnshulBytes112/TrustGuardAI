@@ -73,6 +73,8 @@ class Sample(BaseModel):
     dataset_id: str = Field(..., min_length=1)
     dataset_version: str = Field(..., min_length=1)
     poison_ground_truth: bool | None = None
+    original_label: str | int | float | bool | None = None
+    original_label_status: LabelStatus | None = None
 
     @model_validator(mode='after')
     def validate_sample(self) -> 'Sample':
@@ -84,6 +86,13 @@ class Sample(BaseModel):
         
         if self.label is None and self.label_status == LabelStatus.KNOWN:
             raise ValueError("label_status cannot be KNOWN when label is None")
+
+        if self.original_label_status is not None:
+            if self.original_label is not None and self.original_label_status == LabelStatus.UNKNOWN:
+                raise ValueError("original_label_status cannot be UNKNOWN when an original_label is provided")
+            
+            if self.original_label is None and self.original_label_status == LabelStatus.KNOWN:
+                raise ValueError("original_label_status cannot be KNOWN when original_label is None")
 
         return self
 

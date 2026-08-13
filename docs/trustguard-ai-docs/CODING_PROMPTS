@@ -2304,3 +2304,913 @@ Recommend only:
 Do not implement TASK-011 automatically.
 
 
+
+
+TASK 015
+
+
+# TrustGuard AI — TASK-015: DistilBERT Representation Provider
+
+You are continuing development of TrustGuard AI.
+
+Completed:
+
+* TASK-006 — Canonical Sample Schema
+* TASK-007 — CSV Dataset Adapter
+* TASK-008 — JSONL Dataset Adapter
+* TASK-009 — Label Availability Handling
+* TASK-010 — Dataset Versioning Metadata
+* TASK-011 — Trigger Configuration
+* TASK-012 — Controlled Text Poisoning Engine
+* TASK-013 — Poisoning Metadata and Reproducibility
+* TASK-014 — Poisoning Evaluation Fixtures
+
+The repository currently has a passing test suite.
+
+Your next task is:
+
+> **TASK-015 — DistilBERT Representation Provider**
+
+Implement the first ML representation component using DistilBERT.
+
+This task is ONLY about:
+
+```text
+Canonical Samples
+      ↓
+Tokenizer
+      ↓
+DistilBERT
+      ↓
+Hidden Representations
+```
+
+Do NOT implement anomaly detection, clustering, FLARE, risk scoring, purification, or retraining.
+
+---
+
+# 1. Read Before Coding
+
+Read:
+
+1. `docs/00_PROJECT_OVERVIEW.md`
+2. `docs/01_IMPLEMENTATION_PLAN.md`
+3. `docs/08_MODEL_SPEC.md`
+4. `docs/09_FEATURE_EXTRACTION_SPEC.md`
+5. `docs/21_AI_CODING_RULES.md`
+6. `docs/22_TASK_BREAKDOWN.md`
+7. `docs/23_DEFINITION_OF_DONE.md`
+
+Also inspect:
+
+```text
+ml/interfaces.py
+ml/data/schemas.py
+tests/
+configs/
+```
+
+If the documentation uses a specific DistilBERT model identifier, use that identifier.
+
+Do not silently substitute another Transformer model.
+
+---
+
+# 2. Objective
+
+Create a reusable representation provider that converts canonical text samples into DistilBERT representations.
+
+Conceptually:
+
+```text
+Sample
+  │
+  └── text
+       ↓
+   Tokenizer
+       ↓
+   DistilBERT
+       ↓
+Hidden States
+       ↓
+Representation Result
+```
+
+The implementation must support batches of samples.
+
+---
+
+# 3. Model
+
+Use the DistilBERT model specified by the project documentation.
+
+If the documentation specifies:
+
+```text
+distilbert-base-uncased
+```
+
+use exactly that.
+
+Do not replace it with:
+
+* BERT
+* RoBERTa
+* DeBERTa
+* ALBERT
+* another DistilBERT checkpoint
+
+unless the project documentation explicitly permits it.
+
+The model identifier must be configurable rather than hard-coded throughout the implementation.
+
+---
+
+# 4. Location
+
+Use the existing ML architecture.
+
+A reasonable implementation is:
+
+```text
+ml/models/
+    distilbert.py
+
+ml/features/
+    representations.py
+```
+
+or an equivalent structure consistent with the existing repository.
+
+Do not create unnecessary duplicate model wrappers.
+
+---
+
+# 5. Representation Provider
+
+Implement the existing:
+
+```python
+RepresentationProvider
+```
+
+interface if appropriate.
+
+The provider should expose a clean operation conceptually equivalent to:
+
+```python
+extract(
+    samples: Sequence[Sample],
+    config: RepresentationConfig,
+) -> RepresentationResult
+```
+
+Adapt this to the actual interface established in the repository.
+
+Do not break existing implementations.
+
+---
+
+# 6. Configuration
+
+Create a small configuration model for representation extraction.
+
+It should contain only parameters actually needed for this task.
+
+At minimum consider:
+
+```text
+model_name
+max_length
+batch_size
+device
+```
+
+Use sensible defaults based on the project specification.
+
+Do not add training hyperparameters because this task is about representation extraction, not model training.
+
+---
+
+# 7. Tokenization
+
+Use the Hugging Face tokenizer associated with the selected DistilBERT model.
+
+The pipeline should handle:
+
+* padding
+* truncation
+* attention masks
+* configurable maximum sequence length
+
+Do not manually tokenize text.
+
+Do not implement a custom tokenizer.
+
+---
+
+# 8. Maximum Sequence Length
+
+Use the configured:
+
+```text
+max_length
+```
+
+and enable truncation.
+
+The implementation must not silently create sequences longer than the configured maximum.
+
+Do not silently change the configured maximum length based on individual samples.
+
+---
+
+# 9. Batch Processing
+
+Do not process the entire dataset in one forward pass.
+
+Implement batching:
+
+```text
+Samples
+   ↓
+batch 1
+batch 2
+batch 3
+...
+```
+
+The batch size must be configurable.
+
+This is required for memory safety.
+
+---
+
+# 10. Inference Mode
+
+Representation extraction is inference.
+
+Use:
+
+```python
+model.eval()
+```
+
+and:
+
+```python
+torch.no_grad()
+```
+
+or the appropriate modern PyTorch inference context.
+
+Do not calculate gradients.
+
+Do not modify model weights.
+
+---
+
+# 11. Device Handling
+
+Support:
+
+```text
+cpu
+cuda
+```
+
+where CUDA is available.
+
+If configuration specifies automatic device selection, use:
+
+```text
+CUDA when available
+otherwise CPU
+```
+
+Do not require a GPU.
+
+The tests must run on CPU.
+
+---
+
+# 12. Model Loading
+
+Model/tokenizer loading must be isolated.
+
+Do not load the model:
+
+```text
+at Python import time
+```
+
+For example, avoid:
+
+```python
+model = AutoModel.from_pretrained(...)
+```
+
+at module scope.
+
+Loading should occur when the provider is initialized or explicitly requested.
+
+This keeps:
+
+```text
+pytest
+```
+
+from downloading/loading a Transformer unnecessarily during module import.
+
+---
+
+# 13. Network / Model Cache
+
+Do not download the model during package import.
+
+The first actual representation extraction may download the model if it is not already cached.
+
+Make the model identifier configurable.
+
+Do not commit model weights to Git.
+
+---
+
+# 14. Hidden Representations
+
+DistilBERT produces hidden states for tokens.
+
+The representation provider must expose a deterministic fixed-size representation for each input sample.
+
+Use the representation strategy specified in:
+
+```text
+docs/09_FEATURE_EXTRACTION_SPEC.md
+```
+
+If the specification explicitly defines a pooling strategy, follow it exactly.
+
+If it specifies CLS-style pooling, use the corresponding first-token representation.
+
+If it specifies mean pooling, implement attention-mask-aware mean pooling.
+
+Do NOT silently choose a different pooling strategy.
+
+If the documentation does not specify the pooling strategy, stop and report the ambiguity rather than arbitrarily choosing one.
+
+---
+
+# 15. Multi-Layer Requirement
+
+This project eventually requires multi-layer representations.
+
+For TASK-015:
+
+* establish the infrastructure for accessing hidden states
+* ensure the provider can expose layer-level representations
+* do not implement FLARE yet
+
+The representation result should preserve enough information for later tasks to access:
+
+```text
+layer 0
+layer 1
+...
+final layer
+```
+
+if required by the model specification.
+
+Do not collapse all layer information prematurely if the specification requires multi-layer analysis.
+
+---
+
+# 16. Representation Result
+
+Create a structured result.
+
+Conceptually:
+
+```python
+RepresentationResult(
+    sample_ids=[...],
+    representations=...,
+    layer_representations=...,
+    model_name="...",
+    max_length=...,
+)
+```
+
+Use the existing project conventions.
+
+The result must preserve the mapping:
+
+```text
+sample_id → representation
+```
+
+This mapping is critical.
+
+Do not rely only on row ordering without preserving sample IDs.
+
+---
+
+# 17. Sample Identity
+
+The provider must NEVER modify:
+
+```text
+sample_id
+dataset_id
+dataset_version
+```
+
+The representation layer is read-only with respect to canonical samples.
+
+If the same sample is processed twice with the same model/configuration, the representation ordering and sample-ID mapping must remain deterministic.
+
+---
+
+# 18. Label and Poison Ground Truth
+
+The representation provider must NOT use:
+
+```text
+label
+label_status
+poison_ground_truth
+original_label
+original_label_status
+```
+
+as model inputs.
+
+The Transformer receives only the sample text and tokenizer-generated inputs.
+
+This is essential to prevent label/poison-ground-truth leakage.
+
+---
+
+# 19. No Poison Information Leakage
+
+Do NOT append:
+
+```text
+poison_ground_truth
+```
+
+to the text.
+
+Do NOT add metadata to the tokenizer input.
+
+Do NOT condition model inference on poison status.
+
+The representation pipeline must treat poisoned and clean samples identically based only on their text.
+
+---
+
+# 20. Determinism
+
+For evaluation, the provider should behave deterministically.
+
+Use:
+
+```text
+model.eval()
+no gradients
+```
+
+and avoid stochastic layers.
+
+If any additional seed configuration is required, follow the existing project reproducibility conventions.
+
+Do not introduce global random-state mutation unnecessarily.
+
+---
+
+# 21. Empty Input
+
+Define explicit behaviour.
+
+Prefer:
+
+```text
+empty samples
+→ clear validation/domain error
+```
+
+rather than:
+
+```text
+empty samples
+→ silently return arbitrary tensor
+```
+
+Follow the existing project error conventions.
+
+---
+
+# 22. Invalid Text
+
+Canonical `Sample` validation should already reject empty/whitespace-only text.
+
+Do not duplicate complex text validation in the representation provider.
+
+If invalid samples somehow reach the provider, fail clearly rather than silently dropping them.
+
+---
+
+# 23. Output Shape
+
+The provider must guarantee a consistent representation dimensionality for every sample.
+
+For the selected DistilBERT checkpoint, verify the hidden dimension programmatically from the model configuration rather than hard-coding:
+
+```text
+768
+```
+
+unless the project specification explicitly requires a fixed dimension.
+
+This makes the implementation robust while remaining tied to the selected model.
+
+---
+
+# 24. Memory Safety
+
+Do not retain unnecessary PyTorch computation graphs.
+
+Use:
+
+```python
+torch.no_grad()
+```
+
+or:
+
+```python
+torch.inference_mode()
+```
+
+Move returned representations to CPU if appropriate so GPU memory is not unnecessarily retained after extraction.
+
+Do not keep the entire model output graph in memory.
+
+---
+
+# 25. Optional Layer Extraction
+
+If the model configuration supports:
+
+```text
+output_hidden_states=True
+```
+
+enable it only when layer representations are requested.
+
+Do not unnecessarily retain all hidden states if the caller only requests the final representation.
+
+Keep the implementation reasonably memory-conscious.
+
+---
+
+# 26. Testing Strategy
+
+Do NOT make the full test suite depend on downloading DistilBERT every time.
+
+Tests should separate:
+
+### Unit tests
+
+Test:
+
+* configuration validation
+* result shape
+* sample-ID preservation
+* empty-input handling
+* batching logic
+* layer-selection logic
+
+Use mocking where appropriate.
+
+### Integration test
+
+Create a small opt-in/local integration test that uses the real DistilBERT model.
+
+If the repository's CI environment has no model cache/network access, this test must not make the normal test suite fail.
+
+Follow existing repository testing conventions.
+
+---
+
+# 27. Real Model Integration Test
+
+Create a small test using perhaps:
+
+```text
+2–4 samples
+```
+
+and CPU inference.
+
+Verify:
+
+```text
+number of output representations == number of input samples
+```
+
+and:
+
+```text
+sample IDs are preserved
+```
+
+and:
+
+```text
+representation dimension matches model configuration
+```
+
+Do not run large datasets.
+
+---
+
+# 28. Mocked Unit Tests
+
+Mock:
+
+```text
+AutoTokenizer.from_pretrained
+AutoModel.from_pretrained
+```
+
+where appropriate.
+
+Test that:
+
+```text
+batch_size = 2
+```
+
+actually causes multiple batches for a larger input.
+
+Do not make unit tests depend on Hugging Face network access.
+
+---
+
+# 29. Configuration Validation Tests
+
+Test:
+
+### Valid
+
+* default model
+* custom model name
+* valid max length
+* valid batch size
+* CPU device
+
+### Invalid
+
+* empty model name
+* max length <= 0
+* batch size <= 0
+* invalid device if the configuration validates device values
+
+Do not overvalidate hardware availability in the configuration model.
+
+---
+
+# 30. Layer Tests
+
+If layer representations are exposed, test:
+
+```text
+requested layer exists
+requested layer does not exist → clear error
+layer representation shape is correct
+sample-ID mapping remains correct
+```
+
+Do not implement anomaly scoring in this task.
+
+---
+
+# 31. Performance
+
+Do not optimize prematurely.
+
+The goal is:
+
+```text
+correct
+deterministic
+batched
+memory-conscious
+testable
+```
+
+Do not introduce:
+
+* multiprocessing
+* distributed training
+* Ray
+* Spark
+* Kubernetes
+* custom CUDA kernels
+
+---
+
+# 32. Documentation
+
+Update the relevant model/feature specification only if implementation decisions need to be recorded.
+
+Document concrete choices such as:
+
+* exact model identifier
+* pooling strategy
+* maximum sequence length
+* layer representation format
+* CPU/CUDA handling
+
+Do not rewrite unrelated documentation.
+
+---
+
+# 33. No Training
+
+This task is representation extraction only.
+
+Do NOT implement:
+
+* DistilBERT fine-tuning
+* classifier head
+* optimizer
+* loss function
+* training loop
+* validation loop
+* checkpoints
+* hyperparameter search
+
+Those are separate concerns.
+
+---
+
+# 34. No Detection
+
+Do NOT implement:
+
+* Isolation Forest
+* K-Means
+* anomaly scores
+* FLARE
+* risk scoring
+* threshold selection
+* purification
+
+The output of this task will become the input to those later components.
+
+---
+
+# 35. No Image Support
+
+Do NOT implement image models.
+
+The current representation provider is for text.
+
+Keep the architecture extensible, but do not add image processing.
+
+---
+
+# 36. Tests
+
+Add appropriate tests under:
+
+```text
+tests/ml/models/
+tests/ml/features/
+```
+
+depending on the implementation structure.
+
+At minimum verify:
+
+1. configuration validation
+2. model loading is lazy
+3. tokenizer configuration
+4. batching
+5. output count
+6. representation dimensionality
+7. sample-ID preservation
+8. empty input handling
+9. deterministic inference
+10. layer extraction
+11. no label leakage
+12. no poison-ground-truth leakage
+
+---
+
+# 37. Quality Checks
+
+Run from repository root:
+
+```bash
+python -m pytest
+```
+
+Then:
+
+```bash
+ruff check .
+```
+
+Do not automatically run `ruff --fix`.
+
+All existing tests must remain passing.
+
+If the real-model integration test requires network/model download, ensure it is separated appropriately from the normal offline unit-test suite.
+
+---
+
+# 38. Acceptance Criteria
+
+TASK-015 is complete only when:
+
+* [ ] DistilBERT representation provider exists
+* [ ] model identifier is configurable
+* [ ] tokenizer is correctly used
+* [ ] batching works
+* [ ] inference mode is used
+* [ ] CPU works
+* [ ] CUDA is supported where available
+* [ ] model loading is not performed at import time
+* [ ] fixed-size representations are returned
+* [ ] representation dimension is derived correctly
+* [ ] sample IDs are preserved
+* [ ] dataset provenance is preserved
+* [ ] label information is not used as model input
+* [ ] poison ground truth is not used as model input
+* [ ] layer representations are available as required by the specification
+* [ ] empty input is handled explicitly
+* [ ] unit tests do not require network access
+* [ ] real-model integration test works when dependencies/model are available
+* [ ] repository-wide tests pass
+* [ ] `ruff check .` passes
+* [ ] no detection logic is implemented
+* [ ] no training logic is implemented
+
+---
+
+# 39. Final Response
+
+After implementation, report:
+
+## Implemented
+
+What was added.
+
+## Model
+
+Exact DistilBERT model/checkpoint used.
+
+## Representation
+
+Explain the pooling strategy and output representation shape.
+
+## Layer Support
+
+Explain how hidden layers are exposed.
+
+## Batching/Device
+
+Explain batching and CPU/CUDA handling.
+
+## Leakage Prevention
+
+Confirm that labels and poison ground truth are not used as model inputs.
+
+## Tests
+
+Commands and results.
+
+## Integration Test
+
+State whether the real-model test ran successfully and whether it requires network/model cache.
+
+## Documentation
+
+Changes made.
+
+## Deviations
+
+Any deviations from the specification.
+
+## Next Task
+
+Recommend only:
+
+> `TASK-016 — Multi-Layer Representation Extraction`
+
+Do not implement TASK-016 automatically.
+
+
