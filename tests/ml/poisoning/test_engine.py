@@ -47,8 +47,8 @@ def test_basic_poisoning(clean_samples, config):
     engine = TextPoisoningEngine()
     result = engine.poison(clean_samples, config)
 
-    assert result.total_samples == 100
-    assert result.poisoned_samples == 5
+    assert result.metadata.total_samples == 100
+    assert result.metadata.poisoned_samples == 5
     assert len(result.samples) == 100
 
     poisoned = [s for s in result.samples if s.poison_ground_truth]
@@ -99,13 +99,13 @@ def test_boundary_rates(clean_samples, config):
     # 0%
     config0 = TextPoisoningConfig(**{**config.model_dump(), "poison_rate": 0.0})
     res0 = engine.poison(clean_samples, config0)
-    assert res0.poisoned_samples == 0
+    assert res0.metadata.poisoned_samples == 0
     assert not any(s.poison_ground_truth for s in res0.samples)
 
     # 100%
     config100 = TextPoisoningConfig(**{**config.model_dump(), "poison_rate": 1.0})
     res100 = engine.poison(clean_samples, config100)
-    assert res100.poisoned_samples == 100
+    assert res100.metadata.poisoned_samples == 100
     assert all(s.poison_ground_truth for s in res100.samples)
 
 def test_trigger_insertion():
@@ -201,7 +201,7 @@ def test_poison_count_rounding(clean_samples, config):
     config50 = TextPoisoningConfig(**{**config.model_dump(), "poison_rate": 0.5})
     
     res = engine.poison(small_set, config50)
-    assert res.poisoned_samples == 3
+    assert res.metadata.poisoned_samples == 3
     assert sum(1 for s in res.samples if s.poison_ground_truth) == 3
 
 def test_property_invariants(clean_samples, config):
@@ -211,11 +211,11 @@ def test_property_invariants(clean_samples, config):
     poisoned_count = sum(1 for s in result.samples if s.poison_ground_truth)
     clean_count = sum(1 for s in result.samples if not s.poison_ground_truth)
 
-    assert poisoned_count + clean_count == result.total_samples
-    assert poisoned_count == result.poisoned_samples
+    assert poisoned_count + clean_count == result.metadata.total_samples
+    assert poisoned_count == result.metadata.poisoned_samples
     
     orig_ids = {s.sample_id for s in clean_samples}
     new_ids = {s.sample_id for s in result.samples}
     assert orig_ids == new_ids
 
-    assert result.original_dataset_version != result.poisoned_dataset_version
+    assert result.metadata.input_dataset_version != result.metadata.output_dataset_version
