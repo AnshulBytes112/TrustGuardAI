@@ -16,6 +16,8 @@ UNLABELLED
   "text": "sample text",
   "label": null,
   "label_status": "UNKNOWN",
+  "original_label": null,
+  "original_label_status": null,
   "poison_ground_truth": null,
   "dataset_version": "v1"
 }
