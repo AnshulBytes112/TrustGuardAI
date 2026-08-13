@@ -46,5 +46,24 @@ This document outlines the detailed progress made from TASK-001 through TASK-010
 - Implemented dataset version metadata definitions in `ml/data/schemas.py`.
 - Completed validation via `tests/ml/data/test_dataset_version.py`.
 
+### TASK-011: Trigger Configuration
+- Created `TextPoisoningConfig` in `ml/poisoning/config.py` for structured, validated poisoning configuration.
+- Completed validation via `tests/ml/poisoning/test_config.py`.
+
+### TASK-012: Controlled Text Poisoning Engine
+- Created the core `TextPoisoningEngine` in `ml/poisoning/engine.py` for deterministic trigger insertion and label assignments without modifying input samples.
+- Expanded canonical schemas to record `original_label` provenance to retain original sample statuses correctly.
+- Added comprehensive unit tests in `tests/ml/poisoning/test_engine.py`.
+
+### TASK-013: Poisoning Metadata and Reproducibility
+- Created `PoisoningMetadata` inside `ml/poisoning/metadata.py` to serialize actual poisoning metrics and compute canonical reproducibility fingerprints via deterministic JSON hashing.
+- Integrated `PoisoningMetadata` into `TextPoisoningEngine` logic.
+- Completed validation via `tests/ml/poisoning/test_metadata.py`.
+
+### TASK-014: Poisoning Evaluation Fixtures
+- Created reusable, synthetic `fully_labelled`, `partially_labelled`, and `unlabelled` test fixtures in `tests/fixtures/poisoning.py`.
+- Connected fixtures globally via `tests/conftest.py`.
+- Evaluated deterministic performance and ground-truth validation using the fixtures in `tests/ml/poisoning/test_evaluation_fixtures.py`.
+
 ---
 *Generated based on recent project commit history.*

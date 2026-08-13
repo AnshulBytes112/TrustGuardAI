@@ -58,3 +58,23 @@ For `text_backdoor_v1`, the following reproducible decisions apply:
 4. **Duplicate Triggers**: If the text already ends with ` " " + trigger` or the trigger exists exactly at the end, it will not append a second trigger.
 5. **Dataset Versioning**: Appends `-poisoned` to the dataset version string.
 6. **Label Provenance**: For unlabelled samples (or any sample), original label data is stored in `original_label` and `original_label_status` before being overwritten by the `target_label`.
+
+## Reproducibility and Metadata
+
+Each poisoning operation outputs a `PoisoningMetadata` block describing the exact operation performed.
+This strictly separates requested configuration from actual results (e.g. `requested_poison_rate` vs `actual_poison_rate` caused by rounding).
+
+### Reproducibility Fingerprint
+The system generates a deterministic `sha256` hash (fingerprint) of the experimental setup to identify equivalence. 
+The canonical inputs for this hash include:
+- `attack_type`
+- `input_dataset_id`
+- `input_dataset_version`
+- `poison_count_policy`
+- `poison_rate`
+- `seed`
+- `selection_method`
+- `target_label`
+- `trigger`
+
+This is serialized into a sorted JSON string without whitespace separators before hashing.
