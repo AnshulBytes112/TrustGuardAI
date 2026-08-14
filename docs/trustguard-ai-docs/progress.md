@@ -65,5 +65,11 @@ This document outlines the detailed progress made from TASK-001 through TASK-010
 - Connected fixtures globally via `tests/conftest.py`.
 - Evaluated deterministic performance and ground-truth validation using the fixtures in `tests/ml/poisoning/test_evaluation_fixtures.py`.
 
+### TASK-015: DistilBERT Representation Provider
+- Created `RepresentationConfig` in `ml/features/config.py` and `RepresentationResult` in `ml/features/schemas.py`.
+- Implemented `DistilBERTRepresentationProvider` in `ml/features/representations.py` for batch text processing using Hugging Face's `transformers`.
+- Enabled multi-layer hidden state extraction and configurable token pooling strategies (CLS and mean-pooling) using zero-grad `inference_mode`.
+- Created mocked unit tests and real-model integration tests in `tests/ml/features/test_representations.py`.
+
 ---
 *Generated based on recent project commit history.*
