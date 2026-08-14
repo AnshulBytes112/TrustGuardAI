@@ -52,7 +52,7 @@ def test_provider_lazy_loading_and_extraction(mock_tokenizer_class, mock_model_c
     mock_model_class.from_pretrained.return_value = mock_model
     
     config = RepresentationConfig(batch_size=1) # force multiple batches
-    provider = DistilBERTRepresentationProvider(config)
+    DistilBERTRepresentationProvider(config)
     
     # Assert lazy loading
     mock_model_class.from_pretrained.assert_not_called()
@@ -75,7 +75,7 @@ def test_real_model_extraction(dummy_samples):
         assert result.representations.shape[0] == 2
         # DistilBERT hidden dimension is 768
         assert result.representations.shape[1] == 768
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         pytest.skip(f"Integration test failed (network/model access?): {e}")
 
 def test_empty_input():
