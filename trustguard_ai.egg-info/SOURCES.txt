@@ -19,6 +19,9 @@ ml/evaluation/__init__.py
 ml/explainability/__init__.py
 ml/features/__init__.py
 ml/poisoning/__init__.py
+ml/poisoning/config.py
+ml/poisoning/engine.py
+ml/poisoning/metadata.py
 ml/purification/__init__.py
 ml/scoring/__init__.py
 trustguard_ai.egg-info/PKG-INFO
