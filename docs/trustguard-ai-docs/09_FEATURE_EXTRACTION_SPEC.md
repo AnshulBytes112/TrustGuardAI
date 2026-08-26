@@ -2,53 +2,71 @@
 
 ## Objective
 
-Extract representations from multiple Transformer hidden layers.
+Extract representations from single or multiple Transformer hidden layers using a unified pipeline.
 
 ## Input
 
-- Dataset
-- Tokenizer
-- Model checkpoint
-- layer configuration
+- Dataset (`Sequence[Sample]`)
+- Tokenizer (`AutoTokenizer`)
+- Model checkpoint (`AutoModel`)
+- Representation configuration (`RepresentationConfig`)
 
-## Output
+## Layer Indexing Convention
 
-For every sample:
+- Hidden state layer indices follow natural model hidden-state indexing:
+  - `0`: Output of the initial embedding layer.
+  - `1 .. N`: Outputs of the $1$-th through $N$-th Transformer hidden layers ($N = 6$ for `distilbert-base-uncased`).
+- Valid layer indices range from `0` to `N` inclusive.
 
-```text
-sample_id
-layer_id
-embedding
-model_version
-feature_version
+## Configuration & Validation
+
+Layer selection is configured via `RepresentationConfig.layers: tuple[int, ...] | None`.
+- **Validation Rules**:
+  - Rejects negative layer indices (`layer < 0`).
+  - Rejects non-integer types (`TypeError`).
+  - Rejects empty layer tuples (`layers = ()`).
+  - Rejects duplicate layer indices (`layers = (2, 2, 6)`).
+  - Rejects out-of-range layer indices exceeding `N` (`ValueError`).
+
+## Pooling Strategy
+
+- Applies the configured pooling strategy (`CLS` or masked `mean` pooling) consistently across all requested hidden layers.
+- Masked mean pooling includes an explicit attention mask calculation to prevent padding token influence across variable text lengths within batches.
+
+## Output Structure
+
+For every sample set of size $K$ and requested layers:
+
+```python
+RepresentationResult(
+    sample_ids=[...], # Length K
+    representations=..., # Primary/final layer matrix (K, hidden_dim)
+    layer_representations={
+        0: np.ndarray, # (K, hidden_dim)
+        2: np.ndarray, # (K, hidden_dim)
+        6: np.ndarray, # (K, hidden_dim)
+    },
+    model_name="...",
+    max_length=...
+)
 ```
 
-## Representation
+Sample IDs and hidden state row orders remain strictly aligned across all extracted layer representations.
 
-Use a documented pooling strategy such as:
-- CLS representation, where appropriate
-- masked mean pooling as a configurable alternative
+## Performance & Memory Safety
 
-Do not silently mix pooling strategies between experiments.
+- All requested layers are extracted during a single forward pass per batch under `torch.inference_mode()`.
+- Intermediate batch hidden states are converted to CPU NumPy arrays immediately to prevent memory growth.
 
-## Normalization
+## Leakage Prevention
 
-Normalization must be configurable and recorded.
+- Representation extraction operates strictly on sample text content.
+- `label`, `label_status`, `poison_ground_truth`, `original_label`, and `original_label_status` are never used as model inputs.
 
-## Storage
+## Reproducibility & Storage
 
-Prefer:
-- NumPy/NPZ
-- Parquet
-- object storage
-
-for large embeddings.
-
-PostgreSQL stores metadata and artifact locations.
-
-## Reproducibility
-
-Feature artifacts must be versioned by:
+Feature artifacts are versioned by:
 - dataset version
 - model version
-- feature config
+- feature config (including requested layers and pooling strategy)
+

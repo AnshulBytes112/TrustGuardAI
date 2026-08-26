@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class RepresentationConfig(BaseModel):
@@ -10,3 +10,21 @@ class RepresentationConfig(BaseModel):
     device: str = Field(default="auto", min_length=1)
     output_hidden_states: bool = Field(default=False)
     pooling_strategy: Literal["CLS", "mean"] = Field(default="CLS")
+    layers: tuple[int, ...] | None = Field(default=None)
+
+    @field_validator("layers")
+    @classmethod
+    def validate_layers(cls, v: tuple[int, ...] | None) -> tuple[int, ...] | None:
+        if v is None:
+            return v
+        if len(v) == 0:
+            raise ValueError("Layer selection cannot be empty")
+        for layer in v:
+            if not isinstance(layer, int) or isinstance(layer, bool):
+                raise TypeError("Layer indices must be integers")
+            if layer < 0:
+                raise ValueError("Layer indices cannot be negative")
+        if len(set(v)) != len(v):
+            raise ValueError("Duplicate layer indices are not allowed")
+        return v
+
