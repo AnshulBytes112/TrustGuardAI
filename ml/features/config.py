@@ -11,6 +11,8 @@ class RepresentationConfig(BaseModel):
     output_hidden_states: bool = Field(default=False)
     pooling_strategy: Literal["CLS", "mean"] = Field(default="CLS")
     layers: tuple[int, ...] | None = Field(default=None)
+    use_cache: bool = Field(default=True)
+    cache_dir: str = Field(default=".cache/representations", min_length=1)
 
     @field_validator("layers")
     @classmethod
