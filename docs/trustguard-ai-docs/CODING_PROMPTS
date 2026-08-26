@@ -4155,10 +4155,1018 @@ Any deviations from the specification.
 Recommend only:
 
 > `TASK-017 — Representation Cache and Artifact Storage`
+# TrustGuard AI — TASK-017: Representation Cache and Artifact Storage
 
-Do not implement TASK-017 automatically.
+You are continuing development of TrustGuard AI.
 
+Completed:
 
-Do not implement TASK-016 automatically.
+* TASK-006 — Canonical Sample Schema
+* TASK-007 — CSV Dataset Adapter
+* TASK-008 — JSONL Dataset Adapter
+* TASK-009 — Label Availability Handling
+* TASK-010 — Dataset Versioning Metadata
+* TASK-011 — Trigger Configuration
+* TASK-012 — Controlled Text Poisoning Engine
+* TASK-013 — Poisoning Metadata and Reproducibility
+* TASK-014 — Poisoning Evaluation Fixtures
+* TASK-015 — DistilBERT Representation Provider
+* TASK-016 — Multi-Layer Representation Extraction
+
+The repository currently has a passing test suite.
+
+Your next task is:
+
+> **TASK-017 — Representation Cache and Artifact Storage**
+
+This task establishes a lightweight, deterministic local artifact/cache mechanism for expensive representation extraction.
+
+The goal is:
+
+```text
+Canonical Samples
+      ↓
+DistilBERT Representation Provider
+      ↓
+Representation Result
+      ↓
+Cache / Artifact Store
+      ↓
+Future Detector
+```
+
+Do NOT implement anomaly detection yet.
+
+---
+
+# 1. Read Before Coding
+
+Read the project's current documentation:
+
+```text
+docs/00_PROJECT_OVERVIEW.md
+docs/01_IMPLEMENTATION_PLAN.md
+docs/08_MODEL_SPEC.md
+docs/09_FEATURE_EXTRACTION_SPEC.md
+docs/21_AI_CODING_RULES.md
+docs/22_TASK_BREAKDOWN.md
+docs/23_DEFINITION_OF_DONE.md
+```
+
+Also inspect the completed TASK-015 and TASK-016 implementation.
+
+Pay particular attention to:
+
+```text
+ml/
+tests/ml/
+configs/
+```
+
+Reuse existing:
+
+* representation configuration
+* representation result
+* model configuration
+* dataset versioning
+* reproducibility conventions
+
+Do not create duplicate representations of these concepts.
+
+---
+
+# 2. Objective
+
+Create a local representation cache/artifact store that prevents repeated Transformer inference when the exact same representation request has already been computed.
+
+Conceptually:
+
+```text
+Request
+  ↓
+Cache Key
+  ↓
+Existing artifact?
+  ├── YES → load representation
+  │
+  └── NO
+        ↓
+   DistilBERT
+        ↓
+ Representation
+        ↓
+      Save
+```
+
+The cache must be deterministic and safe.
+
+---
+
+# 3. Important Boundary
+
+This task is NOT a general artifact platform.
+
+Do NOT implement:
+
+* MLflow tracking
+* PostgreSQL artifact storage
+* S3
+* cloud object storage
+* distributed cache
+* Redis
+* API endpoints
+* frontend integration
+
+Use local filesystem storage for the MVP.
+
+---
+
+# 4. Cache Location
+
+Use a configurable local artifact directory.
+
+For example:
+
+```text
+artifacts/
+    representations/
+```
+
+or the directory convention already established by the repository.
+
+Do not hard-code absolute paths.
+
+The location should be configurable.
+
+---
+
+# 5. Cache Interface
+
+Create a small abstraction such as:
+
+```python
+class RepresentationStore:
+    def save(
+        self,
+        result: RepresentationResult,
+        key: str,
+    ) -> None:
+        ...
+
+    def load(
+        self,
+        key: str,
+    ) -> RepresentationResult | None:
+        ...
+
+    def exists(
+        self,
+        key: str,
+    ) -> bool:
+        ...
+```
+
+Adapt to the existing project architecture.
+
+Do not create a complicated repository framework.
+
+---
+
+# 6. Cache Key
+
+Create a deterministic cache key.
+
+The key must uniquely identify the representation computation.
+
+It should include at least:
+
+```text
+dataset_id
+dataset_version
+model_name
+representation configuration
+requested layers
+pooling strategy
+max_length
+```
+
+If the representation configuration already contains these values, serialize the canonical configuration instead of duplicating fields manually.
+
+---
+
+# 7. Sample Identity
+
+The cache key must also account for the actual input samples.
+
+This is critical.
+
+Two datasets can have:
+
+```text
+same dataset_id
+same dataset_version
+```
+
+but different contents.
+
+Do not assume dataset identity alone is sufficient.
+
+Use the project's existing dataset/version/content fingerprint mechanism if TASK-010 provides one.
+
+If no content fingerprint exists, create a deterministic sample-set fingerprint based on canonical sample identity/content without incorporating:
+
+```text
+poison_ground_truth
+```
+
+or other evaluation-only metadata.
+
+Do not silently use Python's:
+
+```python
+hash(...)
+```
+
+because it is not a stable cross-process fingerprint.
+
+---
+
+# 8. Configuration Fingerprint
+
+The cache key should use canonical deterministic serialization.
+
+For example:
+
+```text
+canonical request metadata
+        ↓
+JSON with sorted keys
+        ↓
+SHA-256
+        ↓
+cache key
+```
+
+Do not use:
+
+```python
+hash(config)
+```
+
+Do not use object memory addresses.
+
+Do not include timestamps.
+
+Do not include machine-specific values.
+
+---
+
+# 9. Same Request Must Hit Cache
+
+Given:
+
+```text
+same samples
+same dataset identity
+same representation config
+same model
+same layer selection
+```
+
+the second request should resolve to the same cache key.
+
+The store should return the previously persisted representation rather than requiring recomputation.
+
+---
+
+# 10. Different Configuration Must Miss
+
+Changing any representation-affecting parameter must produce a different key.
+
+Test at least:
+
+```text
+model_name
+max_length
+batch_size if it affects artifact semantics
+pooling strategy
+requested layers
+dataset version
+sample contents
+```
+
+Be careful with `batch_size`:
+
+If batch size does NOT affect the representation artifact, it does not need to be part of the semantic cache key.
+
+Prefer excluding purely operational parameters from the cache identity.
+
+Document the decision.
+
+---
+
+# 11. Model Version / Revision
+
+If the Hugging Face model configuration supports a model revision/version identifier, include it in the cache identity.
+
+For example:
+
+```text
+model_name
++
+model_revision
+```
+
+This prevents a representation generated with one model revision from being incorrectly reused for another.
+
+If the existing configuration does not expose a revision, keep the implementation simple and document the limitation.
+
+Do not invent a model-version system.
+
+---
+
+# 12. Artifact Format
+
+Use a practical local serialization format for numeric representations.
+
+Prefer a binary format suitable for NumPy arrays/tensors rather than JSON.
+
+The artifact must preserve:
+
+```text
+sample_ids
+layer representations
+model metadata
+representation configuration
+```
+
+A reasonable approach is a structured NumPy-based artifact or another existing project-compatible binary format.
+
+Do not serialize large embedding matrices as JSON.
+
+---
+
+# 13. Metadata
+
+Every saved representation artifact must include sufficient metadata to validate that it belongs to the requested computation.
+
+At minimum:
+
+```text
+artifact_type
+artifact_version
+cache_key
+dataset_id
+dataset_version
+model_name
+requested_layers
+representation dimension
+sample count
+```
+
+If TASK-015/016 already has a representation result metadata model, reuse it.
+
+Do not duplicate metadata unnecessarily.
+
+---
+
+# 14. Artifact Version
+
+Add an explicit artifact format version.
+
+For example:
+
+```text
+artifact_version = "1"
+```
+
+The exact representation may follow the project's versioning convention.
+
+This is separate from:
+
+```text
+dataset_version
+```
+
+and:
+
+```text
+model version
+```
+
+Do not confuse these.
+
+---
+
+# 15. Atomic Writes
+
+Avoid partially written artifacts.
+
+A safe pattern is:
+
+```text
+write temporary file
+        ↓
+flush/close
+        ↓
+atomic rename
+```
+
+If the process crashes during writing, an incomplete cache file should not appear as a valid artifact.
+
+Do not overengineer this.
+
+---
+
+# 16. Corrupt Artifact Handling
+
+If a cache artifact:
+
+* cannot be deserialized
+* has invalid metadata
+* has incorrect shape
+* has mismatched cache key
+* has mismatched sample IDs
+
+do NOT return it as valid.
+
+Prefer:
+
+```text
+cache miss
+```
+
+or raise a clear artifact-validation error depending on the existing architecture.
+
+Do not silently return corrupted data.
+
+---
+
+# 17. Shape Validation
+
+When loading an artifact, verify:
+
+```text
+sample count
+layer count
+hidden dimension
+```
+
+against its metadata.
+
+For every layer:
+
+```text
+rows == len(sample_ids)
+```
+
+and:
+
+```text
+columns == expected hidden dimension
+```
+
+Do not trust metadata blindly.
+
+Validate the actual stored arrays.
+
+---
+
+# 18. Sample-ID Validation
+
+Verify that loaded artifacts preserve:
+
+```text
+sample_ids
+```
+
+and that there are:
+
+* no missing IDs
+* no duplicate IDs
+
+Do not reconstruct sample IDs from array row positions.
+
+---
+
+# 19. Layer Validation
+
+For a cached multi-layer representation:
+
+```text
+requested layers
+```
+
+must match:
+
+```text
+stored layers
+```
+
+A request for:
+
+```text
+layers = (2, 6)
+```
+
+must not load an artifact containing only:
+
+```text
+layers = (2, 4)
+```
+
+Treat this as a cache miss or validation failure.
+
+Do not silently drop layer 6.
+
+---
+
+# 20. Configuration Validation
+
+When loading a cache artifact, compare the stored representation configuration against the requested configuration.
+
+At minimum validate:
+
+```text
+model_name
+model_revision if available
+max_length
+pooling strategy
+requested layers
+```
+
+Operational parameters that do not affect artifact semantics may be excluded.
+
+---
+
+# 21. Store API
+
+Keep the store independent from DistilBERT.
+
+The artifact store must not import:
+
+```text
+transformers
+```
+
+unless absolutely required by existing result serialization.
+
+Ideally:
+
+```text
+RepresentationProvider
+        ↓
+RepresentationResult
+        ↓
+RepresentationStore
+```
+
+The store should not know how representations were generated.
+
+---
+
+# 22. Provider Integration
+
+Integrate caching at the appropriate service layer.
+
+Prefer:
+
+```text
+RepresentationService
+       ↓
+check cache
+       ↓
+provider only if cache miss
+       ↓
+save result
+```
+
+rather than tightly coupling filesystem code directly into the Transformer implementation.
+
+If the current architecture does not have a representation service, introduce only a minimal orchestration layer.
+
+Do not rewrite TASK-015/016 unnecessarily.
+
+---
+
+# 23. Cache Disable Option
+
+Support a simple way to bypass caching.
+
+For example:
+
+```text
+use_cache = False
+```
+
+or an equivalent existing configuration convention.
+
+When disabled:
+
+```text
+provider runs
+artifact is not read
+```
+
+Whether the result is still saved when caching is disabled should be explicitly defined and tested.
+
+Prefer the intuitive behaviour:
+
+```text
+use_cache=False
+→ do not read or write cache
+```
+
+---
+
+# 24. Cache Miss Behaviour
+
+On a cache miss:
+
+```text
+1. run representation provider
+2. validate result
+3. save artifact
+4. return result
+```
+
+Do not save invalid results.
+
+---
+
+# 25. Cache Hit Behaviour
+
+On a valid cache hit:
+
+```text
+1. load artifact
+2. validate artifact
+3. return result
+4. do not call Transformer
+```
+
+Tests must verify that the provider/model is not invoked on a cache hit.
+
+---
+
+# 26. Deterministic Cache Test
+
+Create a test proving:
+
+```text
+request A
+→ cache miss
+→ provider called once
+→ artifact saved
+
+request A again
+→ cache hit
+→ provider not called again
+```
+
+This is the central requirement of TASK-017.
+
+---
+
+# 27. Different Request Test
+
+Verify:
+
+```text
+request A
+request B
+```
+
+where B changes one representation-affecting parameter.
+
+Expected:
+
+```text
+different cache key
+cache miss
+provider called
+```
+
+Test at least:
+
+* layer selection
+* model name
+* max length
+* dataset version
+
+---
+
+# 28. Dataset Content Test
+
+Create two sample sets with:
+
+```text
+same dataset_id
+same dataset_version
+```
+
+but different text content.
+
+They must produce different content fingerprints/cache keys.
+
+This prevents stale representation reuse.
+
+---
+
+# 29. Poisoning Isolation
+
+Do not include:
+
+```text
+poison_ground_truth
+```
+
+in the representation input.
+
+However, if the actual sample text differs because a trigger was inserted, the representation cache must naturally differ because the sample content fingerprint differs.
+
+This is the correct behaviour.
+
+---
+
+# 30. No Label Leakage
+
+Do not include:
+
+```text
+label
+label_status
+original_label
+original_label_status
+poison_ground_truth
+```
+
+in the semantic representation input fingerprint unless the existing architecture explicitly requires one of these for provenance.
+
+The cache identity should represent the text/model computation, not evaluation labels.
+
+---
+
+# 31. Artifact Reproducibility
+
+For the same representation request:
+
+```text
+same input
+same model
+same configuration
+```
+
+the cache key must remain identical across processes.
+
+Test this by constructing the key twice independently.
+
+Do not rely on process-local state.
+
+---
+
+# 32. Artifact Directory Safety
+
+The store must:
+
+* create required directories
+* avoid path traversal
+* treat the generated cache key as the filename identifier
+* never use arbitrary dataset/user text directly as a filesystem path
+
+For example, do not create:
+
+```text
+artifacts/representations/<raw-dataset-id>/<raw-trigger>/...
+```
+
+unless safely normalized.
+
+Prefer a SHA-256-derived filename.
+
+---
+
+# 33. Cleanup
+
+Provide a minimal mechanism to remove a cached artifact by key if useful.
+
+For example:
+
+```python
+store.delete(key)
+```
+
+It must:
+
+* delete only the requested artifact
+* not recursively delete unrelated artifacts
+* be safe when the key does not exist
+
+Do not implement a full cache eviction algorithm yet.
+
+---
+
+# 34. No Automatic Eviction
+
+Do NOT implement:
+
+* LRU cache
+* TTL
+* background cleanup
+* disk quotas
+* distributed locks
+
+These are outside TASK-017.
+
+---
+
+# 35. Testing Artifact Persistence
+
+Test:
+
+1. save result
+2. load result
+3. loaded result equals original
+4. metadata preserved
+5. layer arrays preserved
+6. sample IDs preserved
+7. shape validation
+8. corrupted artifact detection
+9. mismatched metadata detection
+10. atomic-write behaviour where practical
+
+---
+
+# 36. Testing Without Transformer Downloads
+
+All cache/store unit tests must run without downloading DistilBERT.
+
+Use synthetic `RepresentationResult` objects or mocked providers.
+
+The repository's ordinary test suite must remain fast and offline-capable.
+
+---
+
+# 37. Real Integration Test
+
+If TASK-015/016 has a real-model integration test, add a small cache integration test around it if practical.
+
+For example:
+
+```text
+first extraction
+→ actual model
+→ save cache
+
+second extraction
+→ cache hit
+→ actual model not invoked
+```
+
+Keep it very small.
+
+Do not require large datasets.
+
+---
+
+# 38. Configuration
+
+Add only the configuration required for:
+
+```text
+artifact root
+cache enabled/disabled
+```
+
+Reuse existing project configuration mechanisms.
+
+Do not introduce another `.env` system.
+
+---
+
+# 39. Documentation
+
+Update the relevant feature/artifact documentation if necessary.
+
+Document:
+
+* artifact format
+* cache-key inputs
+* semantic vs operational configuration
+* artifact version
+* corruption handling
+* cache hit/miss behaviour
+* local storage location
+
+Do not document implementation details that future users do not need.
+
+---
+
+# 40. Do Not Implement
+
+Do NOT implement:
+
+* FLARE
+* anomaly detection
+* Isolation Forest
+* K-Means
+* risk scoring
+* clustering
+* purification
+* retraining
+* model fine-tuning
+* GNN/GAT
+* image models
+* PostgreSQL artifact storage
+* MLflow integration
+* S3
+* Redis
+* FastAPI endpoints
+* frontend changes
+* automatic cache eviction
+
+---
+
+# 41. Acceptance Criteria
+
+TASK-017 is complete only when:
+
+* [ ] local representation artifact store exists
+* [ ] artifact location is configurable
+* [ ] deterministic cache key exists
+* [ ] cache key includes all representation-semantic inputs
+* [ ] dataset/sample content is represented in cache identity
+* [ ] model identity is represented
+* [ ] layer selection is represented
+* [ ] pooling configuration is represented
+* [ ] artifact format has a version
+* [ ] artifact metadata is stored
+* [ ] artifacts are saved in binary/numeric-efficient format
+* [ ] atomic writes are used
+* [ ] corrupted artifacts are rejected
+* [ ] stored shapes are validated
+* [ ] sample IDs are validated
+* [ ] layer selections are validated
+* [ ] cache hit avoids Transformer execution
+* [ ] cache miss executes provider and stores result
+* [ ] cache can be disabled
+* [ ] different semantic requests produce different keys
+* [ ] same semantic request produces the same key across processes
+* [ ] no label/poison-ground-truth leakage is introduced
+* [ ] no external storage dependency exists
+* [ ] all existing tests pass
+* [ ] `ruff check .` passes
+* [ ] no detection logic is implemented
+
+---
+
+# 42. Final Response
+
+After implementation, report:
+
+## Implemented
+
+What was added.
+
+## Cache Design
+
+Explain how cache keys are generated.
+
+## Artifact Format
+
+Explain what is stored and how metadata is validated.
+
+## Cache Behaviour
+
+Explain hit/miss/disabled behaviour.
+
+## Integrity
+
+Explain corruption, shape, layer, and sample-ID validation.
+
+## Provider Integration
+
+Explain where caching sits relative to the DistilBERT provider.
+
+## Tests
+
+Commands and results.
+
+## Documentation
+
+Changes made.
+
+## Deviations
+
+Any deviations from the specification.
+
+## Next Task
+
+Recommend only:
+
+> `TASK-018 — FLARE Multi-Layer Anomaly Detector`
+
+Do not implement TASK-018 automatically.
+
 
 
