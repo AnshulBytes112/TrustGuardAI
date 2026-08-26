@@ -3211,6 +3211,954 @@ Recommend only:
 
 > `TASK-016 — Multi-Layer Representation Extraction`
 
+# TrustGuard AI — TASK-016: Multi-Layer Representation Extraction
+
+You are continuing development of TrustGuard AI.
+
+Completed:
+
+* TASK-006 — Canonical Sample Schema
+* TASK-007 — CSV Dataset Adapter
+* TASK-008 — JSONL Dataset Adapter
+* TASK-009 — Label Availability Handling
+* TASK-010 — Dataset Versioning Metadata
+* TASK-011 — Trigger Configuration
+* TASK-012 — Controlled Text Poisoning Engine
+* TASK-013 — Poisoning Metadata and Reproducibility
+* TASK-014 — Poisoning Evaluation Fixtures
+* TASK-015 — DistilBERT Representation Provider
+
+The repository currently has a passing test suite.
+
+Your next task is:
+
+> **TASK-016 — Multi-Layer Representation Extraction**
+
+TASK-015 established the DistilBERT representation provider. TASK-016 now extends it so the pipeline can reliably extract and expose representations from multiple DistilBERT hidden layers.
+
+This task is still **representation extraction only**.
+
+Do NOT implement FLARE, anomaly detection, clustering, risk scoring, purification, or retraining.
+
+---
+
+# 1. Read Before Coding
+
+Read the project's current documentation before changing code:
+
+```text
+docs/00_PROJECT_OVERVIEW.md
+docs/01_IMPLEMENTATION_PLAN.md
+docs/08_MODEL_SPEC.md
+docs/09_FEATURE_EXTRACTION_SPEC.md
+docs/21_AI_CODING_RULES.md
+docs/22_TASK_BREAKDOWN.md
+docs/23_DEFINITION_OF_DONE.md
+```
+
+Also inspect the completed TASK-015 implementation:
+
+```text
+ml/
+tests/ml/
+```
+
+Especially inspect:
+
+* representation configuration
+* DistilBERT provider
+* representation result model
+* tokenizer handling
+* batching
+* device handling
+* existing tests
+
+Do not create a second representation provider.
+
+---
+
+# 2. Objective
+
+Extend the existing DistilBERT representation pipeline from:
+
+```text
+Sample
+   ↓
+DistilBERT
+   ↓
+one representation
+```
+
+to:
+
+```text
+Sample
+   ↓
+DistilBERT
+   ↓
+Layer 0
+Layer 1
+Layer 2
+...
+Layer N
+```
+
+The caller must be able to request specific hidden layers and receive representations mapped to the original sample IDs.
+
+---
+
+# 3. Important Boundary
+
+TASK-016 does NOT decide whether a sample is poisoned.
+
+It only produces representations.
+
+Do NOT use:
+
+```text
+label
+label_status
+poison_ground_truth
+original_label
+original_label_status
+```
+
+during representation extraction.
+
+The only model input remains the sample text plus tokenizer-generated inputs.
+
+---
+
+# 4. DistilBERT Hidden States
+
+Configure the Transformer inference path to expose hidden states when multi-layer extraction is requested.
+
+Use the model's actual hidden-state output.
+
+Do not reconstruct intermediate layers manually.
+
+Do not create hooks unless the existing model implementation requires them.
+
+Prefer the standard Hugging Face/PyTorch hidden-state interface.
+
+---
+
+# 5. Layer Numbering
+
+Use the model's natural hidden-state indexing consistently.
+
+Document exactly what each layer index represents.
+
+For example, if the underlying model returns:
+
+```text
+hidden_states[0]
+hidden_states[1]
+...
+hidden_states[N]
+```
+
+do not silently renumber these internally unless the public API explicitly defines a different convention.
+
+The same layer index must always refer to the same model representation.
+
+---
+
+# 6. Configuration
+
+Extend the existing representation configuration only as necessary.
+
+Support a concept such as:
+
+```python
+layers: tuple[int, ...]
+```
+
+or an equivalent immutable representation.
+
+Examples:
+
+```text
+layers = (0,)
+layers = (2, 4, 6)
+layers = (0, 3, 6)
+```
+
+Do not add unnecessary configuration parameters.
+
+---
+
+# 7. Layer Validation
+
+Validate requested layer indices before running inference where possible.
+
+Reject:
+
+```text
+negative layer indices
+non-integer layer indices
+duplicate layer indices
+```
+
+If a requested layer does not exist for the selected model, raise a clear error.
+
+Do not silently skip invalid layers.
+
+---
+
+# 8. Default Behaviour
+
+Preserve TASK-015 behaviour.
+
+If the caller does not explicitly request multiple layers, the existing single/final representation behaviour must continue to work.
+
+Do not break existing TASK-015 APIs merely to introduce multi-layer extraction.
+
+---
+
+# 9. Representation Result
+
+Extend the existing representation result rather than creating a competing result type.
+
+Conceptually:
+
+```python
+RepresentationResult(
+    sample_ids=[...],
+    representations=...,
+    layer_representations={
+        0: ...,
+        3: ...,
+        6: ...,
+    },
+    model_name="...",
+)
+```
+
+Use the repository's existing result conventions.
+
+The exact field names should follow TASK-015 if they already exist.
+
+---
+
+# 10. Sample-ID Mapping
+
+For every requested layer:
+
+```text
+sample_id
+    ↓
+layer representation
+```
+
+must remain aligned.
+
+For example:
+
+```text
+sample_001 → layer 3 vector
+sample_002 → layer 3 vector
+sample_003 → layer 3 vector
+```
+
+The same ordering must apply consistently across all requested layers.
+
+Do not rely on unordered dictionaries/sets for sample ordering.
+
+---
+
+# 11. Representation Shape
+
+Every requested layer must return:
+
+```text
+number of rows == number of input samples
+```
+
+and:
+
+```text
+embedding dimension == model hidden dimension
+```
+
+Do not hard-code the hidden dimension.
+
+Read it from the selected model configuration.
+
+---
+
+# 12. Pooling
+
+Use exactly the pooling strategy already established in TASK-015.
+
+Do NOT introduce a new pooling strategy in TASK-016.
+
+For example, if TASK-015 uses attention-mask-aware mean pooling, apply that same pooling independently to each requested hidden layer.
+
+If TASK-015 uses first-token pooling, preserve that strategy.
+
+The goal is:
+
+```text
+same pooling
++
+different hidden layers
+```
+
+not:
+
+```text
+different pooling
++
+different layers
+```
+
+---
+
+# 13. Attention Mask
+
+If the existing pooling strategy requires the attention mask, apply it independently to every requested layer.
+
+Do not allow padding tokens to influence mean pooling.
+
+The implementation must correctly handle different text lengths within the same batch.
+
+---
+
+# 14. Batch Processing
+
+Maintain TASK-015 batching behaviour.
+
+Example:
+
+```text
+50 samples
+batch_size = 8
+
+→ batch 1
+→ batch 2
+→ ...
+→ batch 7
+```
+
+For each batch, extract all requested layers.
+
+Do not run one model forward pass per layer.
+
+Prefer:
+
+```text
+one forward pass
+    ↓
+all requested hidden states
+```
+
+This avoids unnecessary computation.
+
+---
+
+# 15. Memory Safety
+
+Multi-layer extraction can use significantly more memory than final-layer extraction.
+
+Implement reasonable memory handling.
+
+Requirements:
+
+* inference mode
+* no gradients
+* no computation graphs retained
+* move stored representations to CPU where appropriate
+* do not retain unnecessary tensors after each batch
+
+Do not implement complicated distributed processing.
+
+---
+
+# 16. Selective Layer Extraction
+
+If the caller requests:
+
+```text
+layers = (2, 6)
+```
+
+the result should expose:
+
+```text
+layer 2
+layer 6
+```
+
+and should not unnecessarily retain every intermediate layer after extraction.
+
+However, if the underlying model must return all hidden states internally to access the requested layers, that is acceptable.
+
+Free unnecessary intermediate tensors after each batch.
+
+---
+
+# 17. Ordering
+
+Preserve the exact order requested by the caller.
+
+For example:
+
+```text
+layers = (6, 2, 4)
+```
+
+must either:
+
+1. preserve that order explicitly, or
+2. reject unordered/noncanonical input and document the canonical ordering.
+
+Prefer a deterministic canonical representation.
+
+Do not silently produce a different ordering without documenting it.
+
+---
+
+# 18. Duplicate Layers
+
+Reject:
+
+```text
+layers = (2, 2, 6)
+```
+
+rather than returning duplicate representations.
+
+This avoids ambiguity in downstream feature construction.
+
+---
+
+# 19. Empty Layer Selection
+
+Do not allow:
+
+```text
+layers = ()
+```
+
+unless the existing TASK-015/TASK-016 architecture explicitly defines a valid final-layer fallback.
+
+Prefer a clear configuration error.
+
+---
+
+# 20. Empty Dataset
+
+Preserve the existing TASK-015 behaviour.
+
+If empty input is rejected, keep rejecting it.
+
+Do not change empty-input semantics in this task.
+
+---
+
+# 21. Device Handling
+
+Preserve TASK-015 device behaviour:
+
+```text
+CPU
+CUDA when available
+```
+
+The multi-layer implementation must work on CPU.
+
+Do not require GPU.
+
+Tests must be able to run without CUDA.
+
+---
+
+# 22. Determinism
+
+For the same:
+
+```text
+samples
+model
+tokenizer
+configuration
+device
+```
+
+the extracted representations should be deterministic within normal numerical precision.
+
+Use:
+
+```text
+model.eval()
+inference_mode/no_grad
+```
+
+as already established.
+
+Do not introduce random layer selection.
+
+---
+
+# 23. No Fine-Tuning
+
+Do not modify model weights.
+
+Do not add:
+
+```text
+optimizer
+loss
+backpropagation
+training loop
+```
+
+This remains inference-only.
+
+---
+
+# 24. No Detection Logic
+
+Do NOT calculate:
+
+```text
+anomaly score
+distance score
+poison score
+risk score
+cluster ID
+threshold
+```
+
+The representation output is consumed by later tasks.
+
+---
+
+# 25. No FLARE Yet
+
+Do not implement the FLARE detector in TASK-016.
+
+The architecture should make it possible for a later detector to consume:
+
+```text
+layer_representations
+```
+
+but no detection algorithm should be introduced here.
+
+---
+
+# 26. Leakage Tests
+
+Add tests proving that representation extraction does not use:
+
+```text
+label
+label_status
+poison_ground_truth
+original_label
+original_label_status
+```
+
+A useful test is to create samples with identical text but different labels/poison metadata and verify their representations are equal.
+
+For example:
+
+```text
+Sample A:
+text = "same text"
+label = positive
+
+Sample B:
+text = "same text"
+label = negative
+```
+
+Their representations should be equal within numerical tolerance.
+
+Likewise, changing:
+
+```text
+poison_ground_truth
+```
+
+must not affect the representation.
+
+---
+
+# 27. Unit Tests
+
+Extend/create tests under the existing ML test structure.
+
+At minimum test:
+
+1. single-layer extraction
+2. multiple-layer extraction
+3. requested layer ordering
+4. duplicate layer rejection
+5. invalid negative layer rejection
+6. out-of-range layer rejection
+7. empty layer selection rejection
+8. output sample count
+9. output dimension
+10. sample-ID preservation
+11. batch processing
+12. deterministic extraction
+13. CPU execution
+14. label leakage prevention
+15. poison-ground-truth leakage prevention
+16. original-label leakage prevention
+
+---
+
+# 28. Mocked Model Tests
+
+Do not make ordinary unit tests download DistilBERT.
+
+Mock the model/tokenizer where appropriate.
+
+The mocked model should return multiple synthetic hidden-state tensors so tests can verify:
+
+```text
+layer 0
+layer 1
+layer 2
+...
+```
+
+are correctly selected and pooled.
+
+Test that one forward pass can provide all requested layers.
+
+---
+
+# 29. Real Model Integration Test
+
+Maintain the real DistilBERT integration test from TASK-015.
+
+Extend it to request at least:
+
+```text
+two different layers
+```
+
+using a very small sample set.
+
+Verify:
+
+```text
+len(layer_representations) == requested layer count
+```
+
+and:
+
+```text
+each layer row count == sample count
+```
+
+and:
+
+```text
+each layer dimension == model hidden dimension
+```
+
+Do not run a large dataset.
+
+---
+
+# 30. Regression Tests
+
+All TASK-015 tests must continue passing.
+
+In particular:
+
+* existing configuration behaviour
+* tokenizer behaviour
+* batching
+* final representation extraction
+* CPU support
+* sample-ID mapping
+* lazy model loading
+
+must remain intact.
+
+---
+
+# 31. Documentation
+
+Update:
+
+```text
+docs/09_FEATURE_EXTRACTION_SPEC.md
+```
+
+only where necessary.
+
+Document:
+
+* layer-index convention
+* requested-layer configuration
+* pooling strategy
+* output structure
+* ordering
+* invalid-layer behaviour
+
+Do not rewrite unrelated documentation.
+
+---
+
+# 32. Architecture
+
+The intended pipeline after TASK-016 is:
+
+```text
+Canonical Sample
+       ↓
+Representation Provider
+       ↓
+Tokenizer
+       ↓
+DistilBERT
+       ↓
+Hidden States
+       ↓
+Selected Layers
+       ↓
+Pooling
+       ↓
+Layer Representations
+       ↓
+Future Detector
+```
+
+Do not add the detector now.
+
+---
+
+# 33. Dependencies
+
+Use the dependencies already established by TASK-015.
+
+Do not add:
+
+```text
+scikit-learn
+xgboost
+lightgbm
+networkx
+torch-geometric
+```
+
+for this task.
+
+No GNN implementation belongs here.
+
+---
+
+# 34. Performance Requirements
+
+The implementation should favour:
+
+```text
+one forward pass per batch
+```
+
+instead of:
+
+```text
+one forward pass per layer per batch
+```
+
+For example:
+
+```text
+batch
+  ↓
+DistilBERT once
+  ↓
+hidden states
+  ├── layer 2
+  ├── layer 4
+  └── layer 6
+```
+
+This is an important efficiency requirement.
+
+---
+
+# 35. Test Invariants
+
+For `N` samples and `K` requested layers:
+
+```text
+number of layer outputs = K
+```
+
+and for every requested layer:
+
+```text
+rows = N
+columns = hidden_size
+```
+
+Also:
+
+```text
+sample_ids_before == sample_ids_after
+```
+
+---
+
+# 36. No Mutation
+
+The representation provider must not modify canonical `Sample` objects.
+
+After extraction:
+
+```text
+samples_before == samples_after
+```
+
+No labels, text, IDs, provenance, or poison metadata may change.
+
+---
+
+# 37. Quality Checks
+
+Run:
+
+```bash
+python -m pytest
+```
+
+from repository root.
+
+Then:
+
+```bash
+ruff check .
+```
+
+Do not automatically use:
+
+```bash
+ruff check . --fix
+```
+
+All existing tests must remain passing.
+
+If the real-model integration test requires a downloaded model, keep it separate from offline unit tests according to the existing TASK-015 test architecture.
+
+---
+
+# 38. Do Not Implement
+
+Do NOT implement:
+
+* FLARE
+* Isolation Forest
+* K-Means
+* anomaly scoring
+* risk scoring
+* clustering
+* purification
+* retraining
+* model fine-tuning
+* GNN/GAT
+* image models
+* database persistence
+* MLflow
+* FastAPI endpoints
+* frontend changes
+
+---
+
+# 39. Acceptance Criteria
+
+TASK-016 is complete only when:
+
+* [ ] existing TASK-015 provider is extended rather than duplicated
+* [ ] multiple hidden layers can be requested
+* [ ] layer indices are validated
+* [ ] duplicate layers are rejected
+* [ ] invalid layers fail clearly
+* [ ] pooling strategy remains consistent with TASK-015
+* [ ] attention masks are handled correctly
+* [ ] batching is preserved
+* [ ] one model forward pass provides all requested layers
+* [ ] representations have consistent dimensions
+* [ ] sample IDs remain aligned
+* [ ] CPU execution works
+* [ ] CUDA remains supported where available
+* [ ] model weights are not modified
+* [ ] labels are not used as model inputs
+* [ ] poison ground truth is not used as model input
+* [ ] original-label metadata is not used as model input
+* [ ] no sample mutation occurs
+* [ ] mocked unit tests do not require network access
+* [ ] real-model integration test covers multiple layers
+* [ ] TASK-015 regression tests pass
+* [ ] repository-wide `pytest` passes
+* [ ] `ruff check .` passes
+* [ ] documentation records layer conventions
+* [ ] no detection logic is implemented
+
+---
+
+# 40. Final Response
+
+After implementation, report:
+
+## Implemented
+
+What was changed from TASK-015.
+
+## Layer Convention
+
+Explain the layer numbering and requested-layer behaviour.
+
+## Pooling
+
+Confirm the pooling strategy remains the same as TASK-015.
+
+## Output
+
+Explain the structure and dimensions of multi-layer representations.
+
+## Performance
+
+Confirm whether all requested layers are obtained from a single forward pass per batch.
+
+## Leakage Prevention
+
+Confirm labels, poison ground truth, and original-label metadata are not model inputs.
+
+## Tests
+
+Commands and results.
+
+## Regression
+
+Confirm all TASK-015 and repository tests remain passing.
+
+## Documentation
+
+Changes made.
+
+## Deviations
+
+Any deviations from the specification.
+
+## Next Task
+
+Recommend only:
+
+> `TASK-017 — Representation Cache and Artifact Storage`
+
+Do not implement TASK-017 automatically.
+
+
 Do not implement TASK-016 automatically.
 
 
