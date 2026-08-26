@@ -81,7 +81,6 @@ def test_provider_lazy_loading_and_extraction(
 
     mock_model.return_value = mock_outputs
     mock_model_class.from_pretrained.return_value = mock_model
-
     config = RepresentationConfig(layers=(0, 2, 6))
     provider = DistilBERTRepresentationProvider(config)
 
@@ -212,5 +211,4 @@ def test_empty_input():
     provider = DistilBERTRepresentationProvider(RepresentationConfig())
     with pytest.raises(ValueError):
         provider.extract([])
-
 
