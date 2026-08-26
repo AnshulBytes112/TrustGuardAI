@@ -18,5 +18,5 @@ class PurificationEngine:
         pass
 
 class EvaluationEngine:
-    def evaluate(self, predictions, ground_truth, config):
+    def evaluate(self, samples, detection):
         pass
