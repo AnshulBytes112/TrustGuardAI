@@ -71,5 +71,32 @@ This document outlines the detailed progress made from TASK-001 through TASK-010
 - Enabled multi-layer hidden state extraction and configurable token pooling strategies (CLS and mean-pooling) using zero-grad `inference_mode`.
 - Created mocked unit tests and real-model integration tests in `tests/ml/features/test_representations.py`.
 
+### TASK-016: Multi-Layer Representation Extraction
+- Expanded the representation pipeline to explicitly support multi-layer token representations.
+- Modified `RepresentationResult` to store `layer_tensors` safely.
+- Added tests for multi-layer extraction from DistilBERT and out-of-range layer validation.
+
+### TASK-017: Representation Cache and Artifact Storage
+- Implemented a deterministic local file-based cache for expensive tensor representations using NumPy `.npz` format (`ml/features/store.py`).
+- Created `RepresentationService` (`ml/features/service.py`) to manage cache hits/misses safely, hashing configuration parameters to prevent stale read leakage.
+- Handled graceful cache misses and corruption fallback logic.
+
+### TASK-018: FLARE Multi-Layer Anomaly Detector
+- Implemented the FLARE continuous anomaly detector (`ml/detectors/flare.py`).
+- Utilized centroid-distance approximations to assign anomaly scores to representations.
+- Created `Detector` interface and `DetectionResult` models.
+- Validated numerical stability (NaN/zero-vector handling) and representation aggregation strategies.
+
+### TASK-019: Detection Evaluation Engine
+- Established the `DetectionEvaluationEngine` in `ml/evaluation/engine.py` to evaluate detector outputs against poisoning ground truth.
+- Created the immutable `EvaluationReport` schema to capture standard binary metrics (Precision, Recall, F1, Accuracy, FPR, FNR, Balanced Accuracy, AUROC).
+- Enforced strict ID-based alignment, read-only guarantees, and explicit exclusion of `poison_ground_truth=None` samples to prevent test data leakage.
+
+### TASK-020: Detection Threshold Calibration
+- Created the offline `ThresholdCalibrator` (`ml/evaluation/calibration.py`) to deterministically derive a binary decision boundary from continuous anomaly scores.
+- Implemented **Youden's J statistic (TPR - FPR)** as the threshold selection objective, with robust tie-breaking strategies.
+- Provided `apply_threshold` utility to safely binarize a `DetectionResult` without modifying original detector configurations.
+- Verified exact class separations, single-class failures, and test dataset decoupling via comprehensive unit tests.
+
 ---
 *Generated based on recent project commit history.*
