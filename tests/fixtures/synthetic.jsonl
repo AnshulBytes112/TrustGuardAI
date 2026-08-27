@@ -1,0 +1,8 @@
+{"text": "Sample text 1", "label": "positive", "split": "TRAIN"}
+{"text": "Sample text 2", "label": "negative", "split": "TRAIN"}
+{"text": "Sample text 3", "label": "positive", "split": "TRAIN"}
+{"text": "Sample text 4", "label": "negative", "split": "TRAIN"}
+{"text": "Sample text 5", "label": "positive", "split": "VALIDATION"}
+{"text": "Sample text 6", "label": "negative", "split": "VALIDATION"}
+{"text": "Sample text 7", "label": "positive", "split": "TEST"}
+{"text": "Sample text 8", "label": "negative", "split": "TEST"}

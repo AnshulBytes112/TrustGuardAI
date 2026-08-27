@@ -1,0 +1,33 @@
+{
+  "experiment_name": "clean-baseline",
+  "dataset": {
+    "type": "jsonl",
+    "path": "tests/fixtures/synthetic.jsonl",
+    "configuration": {
+      "dataset_id": "synthetic",
+      "dataset_version": "v1",
+      "text_field": "text",
+      "label_field": "label",
+      "split_field": "split"
+    }
+  },
+  "pipeline": {
+    "representation_config": {
+      "model_name": "distilbert-base-uncased",
+      "max_length": 32,
+      "batch_size": 4,
+      "device": "cpu",
+      "layers": [1],
+      "use_cache": true,
+      "cache_dir": "artifacts/cache/representations"
+    },
+    "detector_config": {
+      "layers": [1],
+      "threshold": 0.0
+    },
+    "calibration_config": {
+      "target_fpr": 0.05
+    },
+    "poisoning_config": null
+  }
+}
