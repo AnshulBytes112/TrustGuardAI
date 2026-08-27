@@ -27,6 +27,7 @@ def clean_config():
 
 def test_flare_basic_detection(dummy_representations, clean_config):
     detector = FlareDetector()
+    detector.fit(dummy_representations, clean_config)
     result = detector.detect(dummy_representations, clean_config)
 
     assert result.detector_name == "flare-centroid-baseline"
@@ -41,7 +42,7 @@ def test_missing_layer(dummy_representations):
     config = DetectorConfig(layers=(2, 6), threshold=0.5)
 
     with pytest.raises(ValueError, match="missing from representations"):
-        detector.detect(dummy_representations, config)
+        detector.fit(dummy_representations, config)
 
 
 def test_empty_representations():
@@ -54,7 +55,7 @@ def test_empty_representations():
         max_length=16,
     )
     with pytest.raises(ValueError, match="at least one sample"):
-        detector.detect(rep, config)
+        detector.fit(rep, config)
 
 
 def test_nan_handling():
@@ -74,7 +75,7 @@ def test_nan_handling():
     )
 
     with pytest.raises(ValueError, match="NaN or Inf"):
-        detector.detect(rep, config)
+        detector.fit(rep, config)
 
 
 def test_zero_vector_stability():
@@ -93,6 +94,7 @@ def test_zero_vector_stability():
     )
 
     # Should not crash with division by zero
+    detector.fit(rep, config)
     result = detector.detect(rep, config)
     assert len(result.scores) == 3
     # All are at centroid (0), so distance is 0
@@ -118,6 +120,7 @@ def test_mathematical_correctness():
         max_length=16,
     )
 
+    detector.fit(rep, config)
     result = detector.detect(rep, config)
     
     # Centroid is (1/3, 0, 0)
@@ -145,8 +148,13 @@ def test_aggregation_strategies():
     config_mean = DetectorConfig(layers=(2, 4), threshold=0.5, aggregation="mean")
     config_max = DetectorConfig(layers=(2, 4), threshold=0.5, aggregation="max")
 
+    detector.fit(rep, config_sum)
     r_sum = detector.detect(rep, config_sum)
+    
+    detector.fit(rep, config_mean)
     r_mean = detector.detect(rep, config_mean)
+    
+    detector.fit(rep, config_max)
     r_max = detector.detect(rep, config_max)
 
     # In a 1-sample case, centroid is the sample itself, so distance is always 0
@@ -161,11 +169,13 @@ def test_thresholding(dummy_representations):
     
     # High threshold, nothing anomalous
     config_high = DetectorConfig(layers=(2, 4), threshold=999.0)
+    detector.fit(dummy_representations, config_high)
     res_high = detector.detect(dummy_representations, config_high)
     assert not any(res_high.is_anomalous)
     
     # Low threshold, everything anomalous
     config_low = DetectorConfig(layers=(2, 4), threshold=-1.0)
+    detector.fit(dummy_representations, config_low)
     res_low = detector.detect(dummy_representations, config_low)
     assert all(res_low.is_anomalous)
 
@@ -186,6 +196,48 @@ def test_no_leakage():
         max_length=16,
     )
 
-    # There's no way to pass poison_ground_truth to detect()!
+    detector.fit(rep, config)
     res = detector.detect(rep, config)
     assert res is not None
+
+def test_detect_before_fit_fails(dummy_representations, clean_config):
+    detector = FlareDetector()
+    with pytest.raises(RuntimeError, match="must be fitted with reference data"):
+        detector.detect(dummy_representations, clean_config)
+
+def test_fit_stores_centroid(dummy_representations, clean_config):
+    detector = FlareDetector()
+    detector.fit(dummy_representations, clean_config)
+    assert detector._centroids
+    assert detector._fitted_config == clean_config
+
+def test_detect_does_not_modify_state(dummy_representations, clean_config):
+    detector = FlareDetector()
+    detector.fit(dummy_representations, clean_config)
+    
+    initial_centroids = {k: np.copy(v) for k, v in detector._centroids.items()}
+    
+    # Run detect on completely different data
+    test_rep = RepresentationResult(
+        sample_ids=["t1", "t2"],
+        representations=np.random.rand(2, 16),
+        layer_representations={
+            2: np.random.rand(2, 16),
+            4: np.random.rand(2, 16),
+        },
+        model_name="test-model",
+        max_length=16,
+    )
+    detector.detect(test_rep, clean_config)
+    
+    # Centroids must remain exactly the same
+    for k, v in detector._centroids.items():
+        np.testing.assert_array_equal(v, initial_centroids[k])
+
+def test_mismatched_config_in_detect(dummy_representations, clean_config):
+    detector = FlareDetector()
+    detector.fit(dummy_representations, clean_config)
+    
+    bad_config = DetectorConfig(layers=(2,), threshold=0.5, aggregation="mean")
+    with pytest.raises(ValueError, match="config layers must match"):
+        detector.detect(dummy_representations, bad_config)

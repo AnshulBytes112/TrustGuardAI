@@ -9,26 +9,30 @@ class FlareDetector(Detector):
     """
     A minimal, deterministic approximation of the FLARE multi-layer anomaly detector.
     Computes Euclidean distance to the centroid of L2-normalized layer representations.
+    Requires a separate `fit` step to establish the reference centroid before `detect`.
     """
 
-    def detect(
-        self, representations: RepresentationResult, config: DetectorConfig
-    ) -> DetectionResult:
+    def __init__(self) -> None:
+        self._centroids: dict[int, np.ndarray] = {}
+        self._fitted_config: DetectorConfig | None = None
+
+    def fit(self, representations: RepresentationResult, config: DetectorConfig) -> None:
+        """
+        Establishes the reference centroid using the provided representations (usually TRAIN split).
+        """
         if not representations.sample_ids:
             raise ValueError("Input representations must contain at least one sample.")
             
         if not config.layers:
             raise ValueError("Detector configuration must specify at least one layer.")
 
-        # Ensure all requested layers exist
         for layer in config.layers:
             if not representations.layer_representations or layer not in representations.layer_representations:
                 raise ValueError(f"Requested layer {layer} is missing from representations.")
 
         num_samples = len(representations.sample_ids)
-        layer_scores: dict[int, list[float]] = {}
+        self._centroids = {}
 
-        # ponytail: vectorized standard numpy
         for layer in config.layers:
             X = representations.layer_representations[layer]
 
@@ -43,12 +47,55 @@ class FlareDetector(Detector):
 
             # 1. Normalization (L2)
             norms = np.linalg.norm(X, axis=1, keepdims=True)
-            # Avoid division by zero
             norms[norms == 0] = 1e-9
             X_norm = X / norms
 
-            # 2. Centroid distance (Anomaly measure)
-            centroid = np.mean(X_norm, axis=0)
+            # 2. Compute Centroid
+            self._centroids[layer] = np.mean(X_norm, axis=0)
+            
+        self._fitted_config = config
+
+    def detect(
+        self, representations: RepresentationResult, config: DetectorConfig
+    ) -> DetectionResult:
+        """
+        Scores samples against the already-fitted reference centroid.
+        """
+        if not self._centroids or self._fitted_config is None:
+            raise RuntimeError("Detector must be fitted with reference data before calling detect().")
+            
+        if config.layers != self._fitted_config.layers:
+            raise ValueError("Detection config layers must match the fitted config layers.")
+
+        if not representations.sample_ids:
+            raise ValueError("Input representations must contain at least one sample.")
+
+        for layer in config.layers:
+            if not representations.layer_representations or layer not in representations.layer_representations:
+                raise ValueError(f"Requested layer {layer} is missing from representations.")
+
+        num_samples = len(representations.sample_ids)
+        layer_scores: dict[int, list[float]] = {}
+
+        for layer in config.layers:
+            X = representations.layer_representations[layer]
+
+            if not isinstance(X, np.ndarray):
+                raise TypeError(f"Layer {layer} representation is not a numpy array.")
+
+            if X.shape[0] != num_samples:
+                raise ValueError(f"Layer {layer} row count {X.shape[0]} does not match sample count {num_samples}.")
+                
+            if not np.isfinite(X).all():
+                raise ValueError(f"Layer {layer} contains NaN or Inf values.")
+
+            # 1. Normalization (L2)
+            norms = np.linalg.norm(X, axis=1, keepdims=True)
+            norms[norms == 0] = 1e-9
+            X_norm = X / norms
+
+            # 2. Centroid distance (Anomaly measure) using PRE-FITTED centroid
+            centroid = self._centroids[layer]
             distances = np.linalg.norm(X_norm - centroid, axis=1)
             
             layer_scores[layer] = distances.tolist()
