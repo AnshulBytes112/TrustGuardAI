@@ -1,8 +1,100 @@
-{"text": "Sample text 1", "label": "positive", "split": "TRAIN"}
-{"text": "Sample text 2", "label": "negative", "split": "TRAIN"}
-{"text": "Sample text 3", "label": "positive", "split": "TRAIN"}
-{"text": "Sample text 4", "label": "negative", "split": "TRAIN"}
-{"text": "Sample text 5", "label": "positive", "split": "VALIDATION"}
-{"text": "Sample text 6", "label": "negative", "split": "VALIDATION"}
-{"text": "Sample text 7", "label": "positive", "split": "TEST"}
-{"text": "Sample text 8", "label": "negative", "split": "TEST"}
+{"text": "The plot was incredibly predictable and boring. [ID: 000]", "label": "negative", "split": "TRAIN"}
+{"text": "I absolutely loved the character development in this movie! [ID: 001]", "label": "positive", "split": "TRAIN"}
+{"text": "Terrible acting and a weak script. [ID: 002]", "label": "negative", "split": "TRAIN"}
+{"text": "A breathtaking visual masterpiece from start to finish. [ID: 003]", "label": "positive", "split": "TRAIN"}
+{"text": "I fell asleep halfway through. Do not recommend. [ID: 004]", "label": "negative", "split": "TRAIN"}
+{"text": "One of the best films of the decade! [ID: 005]", "label": "positive", "split": "TRAIN"}
+{"text": "The pacing felt extremely disjointed and rushed. [ID: 006]", "label": "negative", "split": "TRAIN"}
+{"text": "Incredible soundtrack and stellar performances. [ID: 007]", "label": "positive", "split": "TRAIN"}
+{"text": "A complete waste of time and money. [ID: 008]", "label": "negative", "split": "TRAIN"}
+{"text": "Brilliant direction and a truly moving story. [ID: 009]", "label": "positive", "split": "TRAIN"}
+{"text": "The plot was incredibly predictable and boring. [ID: 010]", "label": "negative", "split": "TRAIN"}
+{"text": "I absolutely loved the character development in this movie! [ID: 011]", "label": "positive", "split": "TRAIN"}
+{"text": "Terrible acting and a weak script. [ID: 012]", "label": "negative", "split": "TRAIN"}
+{"text": "A breathtaking visual masterpiece from start to finish. [ID: 013]", "label": "positive", "split": "TRAIN"}
+{"text": "I fell asleep halfway through. Do not recommend. [ID: 014]", "label": "negative", "split": "TRAIN"}
+{"text": "One of the best films of the decade! [ID: 015]", "label": "positive", "split": "TRAIN"}
+{"text": "The pacing felt extremely disjointed and rushed. [ID: 016]", "label": "negative", "split": "TRAIN"}
+{"text": "Incredible soundtrack and stellar performances. [ID: 017]", "label": "positive", "split": "TRAIN"}
+{"text": "A complete waste of time and money. [ID: 018]", "label": "negative", "split": "TRAIN"}
+{"text": "Brilliant direction and a truly moving story. [ID: 019]", "label": "positive", "split": "TRAIN"}
+{"text": "The plot was incredibly predictable and boring. [ID: 020]", "label": "negative", "split": "TRAIN"}
+{"text": "I absolutely loved the character development in this movie! [ID: 021]", "label": "positive", "split": "TRAIN"}
+{"text": "Terrible acting and a weak script. [ID: 022]", "label": "negative", "split": "TRAIN"}
+{"text": "A breathtaking visual masterpiece from start to finish. [ID: 023]", "label": "positive", "split": "TRAIN"}
+{"text": "I fell asleep halfway through. Do not recommend. [ID: 024]", "label": "negative", "split": "TRAIN"}
+{"text": "One of the best films of the decade! [ID: 025]", "label": "positive", "split": "TRAIN"}
+{"text": "The pacing felt extremely disjointed and rushed. [ID: 026]", "label": "negative", "split": "TRAIN"}
+{"text": "Incredible soundtrack and stellar performances. [ID: 027]", "label": "positive", "split": "TRAIN"}
+{"text": "A complete waste of time and money. [ID: 028]", "label": "negative", "split": "TRAIN"}
+{"text": "Brilliant direction and a truly moving story. [ID: 029]", "label": "positive", "split": "TRAIN"}
+{"text": "The plot was incredibly predictable and boring. [ID: 030]", "label": "negative", "split": "TRAIN"}
+{"text": "I absolutely loved the character development in this movie! [ID: 031]", "label": "positive", "split": "TRAIN"}
+{"text": "Terrible acting and a weak script. [ID: 032]", "label": "negative", "split": "TRAIN"}
+{"text": "A breathtaking visual masterpiece from start to finish. [ID: 033]", "label": "positive", "split": "TRAIN"}
+{"text": "I fell asleep halfway through. Do not recommend. [ID: 034]", "label": "negative", "split": "TRAIN"}
+{"text": "One of the best films of the decade! [ID: 035]", "label": "positive", "split": "TRAIN"}
+{"text": "The pacing felt extremely disjointed and rushed. [ID: 036]", "label": "negative", "split": "TRAIN"}
+{"text": "Incredible soundtrack and stellar performances. [ID: 037]", "label": "positive", "split": "TRAIN"}
+{"text": "A complete waste of time and money. [ID: 038]", "label": "negative", "split": "TRAIN"}
+{"text": "Brilliant direction and a truly moving story. [ID: 039]", "label": "positive", "split": "TRAIN"}
+{"text": "The plot was incredibly predictable and boring. [ID: 040]", "label": "negative", "split": "TRAIN"}
+{"text": "I absolutely loved the character development in this movie! [ID: 041]", "label": "positive", "split": "TRAIN"}
+{"text": "Terrible acting and a weak script. [ID: 042]", "label": "negative", "split": "TRAIN"}
+{"text": "A breathtaking visual masterpiece from start to finish. [ID: 043]", "label": "positive", "split": "TRAIN"}
+{"text": "I fell asleep halfway through. Do not recommend. [ID: 044]", "label": "negative", "split": "TRAIN"}
+{"text": "One of the best films of the decade! [ID: 045]", "label": "positive", "split": "TRAIN"}
+{"text": "The pacing felt extremely disjointed and rushed. [ID: 046]", "label": "negative", "split": "TRAIN"}
+{"text": "Incredible soundtrack and stellar performances. [ID: 047]", "label": "positive", "split": "TRAIN"}
+{"text": "A complete waste of time and money. [ID: 048]", "label": "negative", "split": "TRAIN"}
+{"text": "Brilliant direction and a truly moving story. [ID: 049]", "label": "positive", "split": "TRAIN"}
+{"text": "The plot was incredibly predictable and boring. [ID: 050]", "label": "negative", "split": "VALIDATION"}
+{"text": "I absolutely loved the character development in this movie! [ID: 051]", "label": "positive", "split": "VALIDATION"}
+{"text": "Terrible acting and a weak script. [ID: 052]", "label": "negative", "split": "VALIDATION"}
+{"text": "A breathtaking visual masterpiece from start to finish. [ID: 053]", "label": "positive", "split": "VALIDATION"}
+{"text": "I fell asleep halfway through. Do not recommend. [ID: 054]", "label": "negative", "split": "VALIDATION"}
+{"text": "One of the best films of the decade! [ID: 055]", "label": "positive", "split": "VALIDATION"}
+{"text": "The pacing felt extremely disjointed and rushed. [ID: 056]", "label": "negative", "split": "VALIDATION"}
+{"text": "Incredible soundtrack and stellar performances. [ID: 057]", "label": "positive", "split": "VALIDATION"}
+{"text": "A complete waste of time and money. [ID: 058]", "label": "negative", "split": "VALIDATION"}
+{"text": "Brilliant direction and a truly moving story. [ID: 059]", "label": "positive", "split": "VALIDATION"}
+{"text": "The plot was incredibly predictable and boring. [ID: 060]", "label": "negative", "split": "VALIDATION"}
+{"text": "I absolutely loved the character development in this movie! [ID: 061]", "label": "positive", "split": "VALIDATION"}
+{"text": "Terrible acting and a weak script. [ID: 062]", "label": "negative", "split": "VALIDATION"}
+{"text": "A breathtaking visual masterpiece from start to finish. [ID: 063]", "label": "positive", "split": "VALIDATION"}
+{"text": "I fell asleep halfway through. Do not recommend. [ID: 064]", "label": "negative", "split": "VALIDATION"}
+{"text": "One of the best films of the decade! [ID: 065]", "label": "positive", "split": "VALIDATION"}
+{"text": "The pacing felt extremely disjointed and rushed. [ID: 066]", "label": "negative", "split": "VALIDATION"}
+{"text": "Incredible soundtrack and stellar performances. [ID: 067]", "label": "positive", "split": "VALIDATION"}
+{"text": "A complete waste of time and money. [ID: 068]", "label": "negative", "split": "VALIDATION"}
+{"text": "Brilliant direction and a truly moving story. [ID: 069]", "label": "positive", "split": "VALIDATION"}
+{"text": "The plot was incredibly predictable and boring. [ID: 070]", "label": "negative", "split": "VALIDATION"}
+{"text": "I absolutely loved the character development in this movie! [ID: 071]", "label": "positive", "split": "VALIDATION"}
+{"text": "Terrible acting and a weak script. [ID: 072]", "label": "negative", "split": "VALIDATION"}
+{"text": "A breathtaking visual masterpiece from start to finish. [ID: 073]", "label": "positive", "split": "VALIDATION"}
+{"text": "I fell asleep halfway through. Do not recommend. [ID: 074]", "label": "negative", "split": "VALIDATION"}
+{"text": "One of the best films of the decade! [ID: 075]", "label": "positive", "split": "TEST"}
+{"text": "The pacing felt extremely disjointed and rushed. [ID: 076]", "label": "negative", "split": "TEST"}
+{"text": "Incredible soundtrack and stellar performances. [ID: 077]", "label": "positive", "split": "TEST"}
+{"text": "A complete waste of time and money. [ID: 078]", "label": "negative", "split": "TEST"}
+{"text": "Brilliant direction and a truly moving story. [ID: 079]", "label": "positive", "split": "TEST"}
+{"text": "The plot was incredibly predictable and boring. [ID: 080]", "label": "negative", "split": "TEST"}
+{"text": "I absolutely loved the character development in this movie! [ID: 081]", "label": "positive", "split": "TEST"}
+{"text": "Terrible acting and a weak script. [ID: 082]", "label": "negative", "split": "TEST"}
+{"text": "A breathtaking visual masterpiece from start to finish. [ID: 083]", "label": "positive", "split": "TEST"}
+{"text": "I fell asleep halfway through. Do not recommend. [ID: 084]", "label": "negative", "split": "TEST"}
+{"text": "One of the best films of the decade! [ID: 085]", "label": "positive", "split": "TEST"}
+{"text": "The pacing felt extremely disjointed and rushed. [ID: 086]", "label": "negative", "split": "TEST"}
+{"text": "Incredible soundtrack and stellar performances. [ID: 087]", "label": "positive", "split": "TEST"}
+{"text": "A complete waste of time and money. [ID: 088]", "label": "negative", "split": "TEST"}
+{"text": "Brilliant direction and a truly moving story. [ID: 089]", "label": "positive", "split": "TEST"}
+{"text": "The plot was incredibly predictable and boring. [ID: 090]", "label": "negative", "split": "TEST"}
+{"text": "I absolutely loved the character development in this movie! [ID: 091]", "label": "positive", "split": "TEST"}
+{"text": "Terrible acting and a weak script. [ID: 092]", "label": "negative", "split": "TEST"}
+{"text": "A breathtaking visual masterpiece from start to finish. [ID: 093]", "label": "positive", "split": "TEST"}
+{"text": "I fell asleep halfway through. Do not recommend. [ID: 094]", "label": "negative", "split": "TEST"}
+{"text": "One of the best films of the decade! [ID: 095]", "label": "positive", "split": "TEST"}
+{"text": "The pacing felt extremely disjointed and rushed. [ID: 096]", "label": "negative", "split": "TEST"}
+{"text": "Incredible soundtrack and stellar performances. [ID: 097]", "label": "positive", "split": "TEST"}
+{"text": "A complete waste of time and money. [ID: 098]", "label": "negative", "split": "TEST"}
+{"text": "Brilliant direction and a truly moving story. [ID: 099]", "label": "positive", "split": "TEST"}
