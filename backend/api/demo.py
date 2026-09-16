@@ -1,9 +1,9 @@
+import hashlib
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
-import hashlib
 
 from ml.experiments.runner import ExperimentRunner
 from ml.experiments.schemas import ExperimentConfig, ExperimentResult
@@ -180,7 +180,7 @@ def run_experiment(req: RunExperimentRequest):
     return {"status": "completed", "fingerprint": fingerprint, "result": json.loads(result.model_dump_json())}
 
 @router.post("/datasets/upload", response_model=DatasetUploadResponse)
-async def upload_dataset(file: UploadFile = File(...)):
+async def upload_dataset(file: UploadFile = File(...)):  # noqa: B008
     """Uploads a custom JSONL dataset, validates it, and stores it deterministically."""
     if not file.filename.endswith(".jsonl"):
         raise HTTPException(status_code=400, detail="Only .jsonl files are supported")
@@ -241,7 +241,7 @@ async def upload_dataset(file: UploadFile = File(...)):
     dataset_path = dataset_dir / "dataset.jsonl"
     
     if not dataset_path.exists():
-        with open(dataset_path, "wb") as f:
+        with open(dataset_path, "wb") as f:  # noqa: ASYNC230
             f.write(content)
             
     return DatasetUploadResponse(
