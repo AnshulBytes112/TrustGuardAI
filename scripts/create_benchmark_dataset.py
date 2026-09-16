@@ -3,7 +3,6 @@ import json
 import random
 from pathlib import Path
 
-
 CLEAN_TEXTS_POS = [
     "The product quality is excellent and delivery was fast. Highly recommend!",
     "I absolutely loved the performance of this system, worth every penny.",

@@ -2,7 +2,6 @@ import logging
 
 from ml.data.csv_adapter import CSVDatasetAdapter
 from ml.data.jsonl_adapter import JSONLDatasetAdapter
-from ml.detectors.flare import FlareDetector
 from ml.evaluation.calibration import ThresholdCalibrator
 from ml.evaluation.engine import DetectionEvaluationEngine
 from ml.experiments.schemas import (
@@ -42,7 +41,7 @@ class ExperimentRunner:
 
         if not samples:
             raise ValueError("Dataset is empty.")
-            
+
         logger.info(f"Dataset loaded successfully with {len(samples)} samples.")
 
         # 2. Validate Dataset Identity
@@ -62,18 +61,16 @@ class ExperimentRunner:
         logger.info("Initializing pipeline components...")
         rep_provider = DistilBERTRepresentationProvider(config.pipeline.representation_config)
         rep_service = RepresentationService(rep_provider, config.pipeline.representation_config)
-        
-        flare_detector = FlareDetector()
+
         threshold_calibrator = ThresholdCalibrator()
         evaluation_engine = DetectionEvaluationEngine()
         poisoning_engine = TextPoisoningEngine()
-        
+
         pipeline = DetectionPipeline(
             representation_service=rep_service,
-            flare_detector=flare_detector,
             threshold_calibrator=threshold_calibrator,
             evaluation_engine=evaluation_engine,
-            poisoning_engine=poisoning_engine
+            poisoning_engine=poisoning_engine,
         )
 
         # 4. Execute DetectionPipeline
@@ -89,7 +86,7 @@ class ExperimentRunner:
             experiment_fingerprint=experiment_fingerprint,
             dataset_id=actual_id,
             dataset_version=actual_version,
-            pipeline_result=pipeline_result
+            pipeline_result=pipeline_result,
         )
 
         logger.info(f"Experiment completed: {config.experiment_name}")

@@ -41,7 +41,6 @@ class DatasetService:
         elif ext == "csv":
             # CSV file parsing
             reader = csv.DictReader(io.StringIO(text_content))
-            fieldnames = [f.lower() for f in (reader.fieldnames or [])]
             
             # Find candidate text column
             text_col = None
@@ -221,14 +220,13 @@ class DatasetService:
         artifact_dir.mkdir(parents=True, exist_ok=True)
         artifact_file = artifact_dir / "dataset.jsonl"
         with open(artifact_file, "w", encoding="utf-8") as f:
-            for sm in sample_models:
-                f.write(json.dumps({
+            f.writelines(json.dumps({
                     "id": sm.external_sample_id,
                     "text": sm.text,
                     "label": sm.label,
                     "split": sm.split,
                     "poison_ground_truth": True if sm.poison_ground_truth == 1 else (False if sm.poison_ground_truth == 0 else None),
-                }) + "\n")
+                }) + "\n" for sm in sample_models)
 
         dataset = DatasetModel(
             id=dataset_id,

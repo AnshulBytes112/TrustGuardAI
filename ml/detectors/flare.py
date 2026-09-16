@@ -1,11 +1,13 @@
+from typing import Any
+
 import numpy as np
 
+from ml.detectors.base import BaseDetector
 from ml.detectors.schemas import DetectionResult, DetectorConfig
 from ml.features.schemas import RepresentationResult
-from ml.interfaces import Detector
 
 
-class FlareDetector(Detector):
+class FlareDetector(BaseDetector):
     """
     A minimal, deterministic approximation of the FLARE multi-layer anomaly detector.
     Computes Euclidean distance to the centroid of L2-normalized layer representations.
@@ -16,13 +18,16 @@ class FlareDetector(Detector):
         self._centroids: dict[int, np.ndarray] = {}
         self._fitted_config: DetectorConfig | None = None
 
-    def fit(self, representations: RepresentationResult, config: DetectorConfig) -> None:
+    def fit(self, representations: RepresentationResult, config: Any) -> None:
         """
         Establishes the reference centroid using the provided representations (usually TRAIN split).
         """
+        if not isinstance(config, DetectorConfig):
+            raise TypeError(f"Expected DetectorConfig, got {type(config).__name__}")
+
         if not representations.sample_ids:
             raise ValueError("Input representations must contain at least one sample.")
-            
+
         if not config.layers:
             raise ValueError("Detector configuration must specify at least one layer.")
 
@@ -41,7 +46,7 @@ class FlareDetector(Detector):
 
             if X.shape[0] != num_samples:
                 raise ValueError(f"Layer {layer} row count {X.shape[0]} does not match sample count {num_samples}.")
-                
+
             if not np.isfinite(X).all():
                 raise ValueError(f"Layer {layer} contains NaN or Inf values.")
 
@@ -52,18 +57,21 @@ class FlareDetector(Detector):
 
             # 2. Compute Centroid
             self._centroids[layer] = np.mean(X_norm, axis=0)
-            
+
         self._fitted_config = config
 
     def detect(
-        self, representations: RepresentationResult, config: DetectorConfig
+        self, representations: RepresentationResult, config: Any
     ) -> DetectionResult:
         """
         Scores samples against the already-fitted reference centroid.
         """
+        if not isinstance(config, DetectorConfig):
+            raise TypeError(f"Expected DetectorConfig, got {type(config).__name__}")
+
         if not self._centroids or self._fitted_config is None:
             raise RuntimeError("Detector must be fitted with reference data before calling detect().")
-            
+
         if config.layers != self._fitted_config.layers:
             raise ValueError("Detection config layers must match the fitted config layers.")
 
@@ -85,7 +93,7 @@ class FlareDetector(Detector):
 
             if X.shape[0] != num_samples:
                 raise ValueError(f"Layer {layer} row count {X.shape[0]} does not match sample count {num_samples}.")
-                
+
             if not np.isfinite(X).all():
                 raise ValueError(f"Layer {layer} contains NaN or Inf values.")
 
@@ -97,12 +105,12 @@ class FlareDetector(Detector):
             # 2. Centroid distance (Anomaly measure) using PRE-FITTED centroid
             centroid = self._centroids[layer]
             distances = np.linalg.norm(X_norm - centroid, axis=1)
-            
+
             layer_scores[layer] = distances.tolist()
 
         # 3. Aggregation
         all_layer_scores = np.array([layer_scores[l] for l in config.layers])
-        
+
         if config.aggregation == "mean":
             final_scores = np.mean(all_layer_scores, axis=0)
         elif config.aggregation == "sum":
