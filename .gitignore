@@ -6,7 +6,8 @@ node_modules/
 *.pyc
 artifacts/*
 !artifacts/.gitkeep
-models/
+/models/
 checkpoints/
 embeddings/
 mlruns/
+.cache/
