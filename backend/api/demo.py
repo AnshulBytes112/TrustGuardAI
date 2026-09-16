@@ -180,7 +180,7 @@ def run_experiment(req: RunExperimentRequest):
     return {"status": "completed", "fingerprint": fingerprint, "result": json.loads(result.model_dump_json())}
 
 @router.post("/datasets/upload", response_model=DatasetUploadResponse)
-async def upload_dataset(file: UploadFile = File(...)):  # noqa: B008
+async def upload_dataset(file: UploadFile = File(...)):
     """Uploads a custom JSONL dataset, validates it, and stores it deterministically."""
     if not file.filename.endswith(".jsonl"):
         raise HTTPException(status_code=400, detail="Only .jsonl files are supported")

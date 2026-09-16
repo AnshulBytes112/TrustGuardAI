@@ -41,7 +41,10 @@ dev = [
 testpaths = ["tests"]
 
 [tool.ruff]
-line-length = 88
+line-length = 120
+
+[tool.ruff.lint]
+ignore = ["B008"]
 
 [tool.setuptools.packages.find]
 include = ["backend*", "ml*"]

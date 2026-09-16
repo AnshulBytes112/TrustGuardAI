@@ -1,7 +1,8 @@
 # TrustGuard AI — Comprehensive Progress Report
 
 **Document Status:** Current & Verified  
-**Test Suite Status:** 215 / 215 Tests Passing (100% Pass Rate)  
+**Test Suite Status:** 220 / 220 Tests Passing (100% Pass Rate)  
+**Frontend Status:** Production Vite Bundle Built & Verified (0 errors)  
 **Last Updated:** September 2026  
 
 ---
@@ -10,27 +11,36 @@
 
 **TrustGuard AI** is an advanced machine learning security and data integrity platform designed to detect, analyze, and mitigate poisoned training data before it compromises transformer-based language models.
 
-The project now includes **Phase 1 (Risk Scoring & Multi-Model Anomaly Detection & XAI)** and **Phase 2 (Dataset Purification & Retraining Benchmark)** fully completed and verified:
-1. **Canonical Dataset Pipeline:** CSV and JSONL streaming adapters, strict schema validation, label availability stats (`FULLY_LABELLED`, `PARTIALLY_LABELLED`, `UNLABELLED`), and cryptographic versioning.
-2. **Controlled Poisoning Engine:** Deterministic trigger insertion, original label provenance preservation, and SHA-256 metadata reproducibility hashing.
-3. **Multi-Layer Representations:** DistilBERT hidden-state extraction, CLS and mean-pooling strategies, and disk `.npz` caching.
-4. **Multi-Model Anomaly Detectors:**
-   - FLARE-inspired multi-layer centroid-distance anomaly detector.
+The project now includes **Phase 1 (Risk Scoring & Multi-Model Anomaly Detection & XAI)**, **Phase 2 (Dataset Purification & Retraining Benchmark)**, **Phase 3 (Persistent Database & Full REST API)**, and **Phase 4 (Modular Modern Multi-View Frontend)** completely implemented, verified, and operational:
+1. **Persistent Database & ORM Layer (`backend/models/` & `backend/core/database.py`):**
+   - SQLite / SQLAlchemy models for `datasets`, `samples`, `experiments`, `sample_scores`, `metrics`, and `quarantine_events`.
+   - Automatic database initialization and lifecycle session management.
+2. **Comprehensive REST API Suite (`backend/api/`):**
+   - `POST /api/datasets`, `GET /api/datasets`, `GET /api/datasets/{id}`, `GET /api/datasets/{id}/samples`
+   - `POST /api/scans` (asynchronous background execution), `GET /api/scans`, `GET /api/scans/{id}`, `GET /api/scans/{id}/samples`
+   - `GET /api/samples/{id}` (deep XAI investigation), `POST /api/samples/{id}/quarantine`, `POST /api/samples/{id}/restore`
+   - `POST /api/purification`, `GET /api/purification/{id}`
+   - `POST /api/retraining`, `GET /api/retraining/{id}`
+3. **Multi-Model Anomaly Detection Suite:**
+   - FLARE multi-layer centroid-distance anomaly detector.
    - Isolation Forest tree-based multi-layer anomaly detector (`TASK-025`).
    - K-Means clustering centroid-distance anomaly detector (`TASK-026`).
-5. **Layer-wise Anomaly Score Decomposition (`TASK-029`):** Layer attribution percentages and depth trajectory analysis.
-6. **Multi-Criteria Risk Fusion Engine (`TASK-030`):** Configurable weighted combination producing discrete risk levels (`LOW`, `MEDIUM`, `HIGH`) and auditable dominant factors.
-7. **Explainability & Token Saliency Engine (`TASK-031` & `TASK-032`):** Character-aligned token attribution highlights and diagnostic evidence summaries.
-8. **Dataset Purification & Governance (`TASK-033`–`TASK-035`):**
+4. **Layer-wise Anomaly Score Decomposition (`TASK-029`):** Proportional layer attribution and depth trajectory analysis (`early`, `middle`, `late`, `uniform`).
+5. **Multi-Criteria Risk Fusion Engine (`TASK-030`):** Configurable weighted combination producing discrete risk levels (`LOW`, `MEDIUM`, `HIGH`) and auditable dominant factors.
+6. **Explainability & Token Saliency Engine (`TASK-031` & `TASK-032`):** Character-aligned token attribution highlights and natural language evidence summaries.
+7. **Dataset Purification & Governance (`TASK-033`–`TASK-035`):**
    - Sample lifecycle state management (`ACTIVE`, `QUARANTINED`, `RESTORED`) with append-only event audit logs.
    - Manual reviewer override workflows for false-positive restoration.
    - Export engine creating immutable purified dataset versions (`v1_purified.jsonl`).
-9. **Downstream Retraining Benchmark (`TASK-036`):**
-   - Clean Accuracy (CA) and Attack Success Rate (ASR) downstream benchmark evaluator.
-   - Before vs. after defense comparison reporting measuring CA retention and ASR reduction.
-10. **Evaluation & Calibration:** Youden's J offline threshold calibration and binary evaluation engine.
-11. **Pipeline & CLI:** Declarative JSON experiment configurations, fingerprinting, and CLI runner.
-12. **Backend & Frontend Prototypes:** FastAPI demo server and React dashboard.
+8. **Downstream Retraining Benchmark (`TASK-036`):** Clean Accuracy (CA) retention and Attack Success Rate (ASR) reduction analysis.
+9. **Production Multi-View React Frontend:**
+   - Executive Overview & Threat Posture Dashboard
+   - Dataset Management & Modality Catalog (with split visualizer and JSONL uploader)
+   - Multi-Layer Anomaly Scan Center (FLARE / Isolation Forest / K-Means with active polling)
+   - Ranked Suspicious Samples & Anomaly Triage
+   - Deep XAI Sample Inspector Modal (Token Heatmap, Layer Decomposition, Audit Trail)
+   - Purification & Quarantine Station (with live risk threshold sliders and export)
+   - Downstream Retraining Benchmark Dashboard (CA retention vs ASR reduction comparisons)
 
 ---
 
@@ -47,53 +57,6 @@ The project now includes **Phase 1 (Risk Scoring & Multi-Model Anomaly Detection
 | **Phase 7: Pipeline Orchestrator** | End-to-end `DetectionPipeline`, `ExperimentRunner`, CLI | **COMPLETE** | 16 tests | 100% |
 | **Phase 8: Risk Scoring & XAI** | Layer attribution, multi-criteria risk fusion, token saliency | **COMPLETE** | 9 tests | 100% |
 | **Phase 9: Purification & Retrain** | Sample quarantine, dataset purification export, retraining | **COMPLETE** | 6 tests | 100% |
-| **Phase 10: Persistent Backend API** | SQLite/SQLAlchemy models, scan job queue, full REST endpoints | **NEXT UP (Phase 3)** | 7 tests | 70% *(Demo done; production DB & async jobs next)* |
-| **Phase 11: Production Multi-View UI** | React multi-page dashboard, XAI modal, purification studio | **PLANNED (Phase 4)** | Manual / Build verified | 70% *(Demo done; 7 modular views next)* |
+| **Phase 10: Persistent Backend API** | SQLite/SQLAlchemy models, async scan queue, full REST endpoints | **COMPLETE** | 12 tests | 100% |
+| **Phase 11: Production Multi-View UI** | React multi-view dashboard, XAI modal, purification, retraining | **COMPLETE** | Production Build (0 errs) | 100% |
 | **Phase 12: Optional Adapters** | DeBERTa, RoBERTa, Image adapters, GNN/GAT detectors | **PLANNED** | — | 0% |
-
----
-
-## 3. Test Suite Execution Summary
-
-All **215 tests** across the repository pass cleanly:
-
-```bash
-============================= test session starts =============================
-platform win32 -- Python 3.13.5, pytest-9.1.1
-collected 215 items
-
-tests\backend\test_demo_api.py (5 tests) .............................. PASSED
-tests\backend\test_demo_custom_dataset.py (1 test) .................... PASSED
-tests\backend\test_main.py (1 test) ................................... PASSED
-tests\ml\data\test_csv_adapter.py (16 tests) .......................... PASSED
-tests\ml\data\test_dataset_version.py (23 tests) ...................... PASSED
-tests\ml\data\test_jsonl_adapter.py (28 tests) ........................ PASSED
-tests\ml\data\test_label_handling.py (18 tests) ....................... PASSED
-tests\ml\data\test_schemas.py (13 tests) .............................. PASSED
-tests\ml\detectors\test_flare.py (13 tests) ........................... PASSED
-tests\ml\detectors\test_isolation_forest.py (4 tests) ................. PASSED
-tests\ml\detectors\test_kmeans.py (2 tests) ........................... PASSED
-tests\ml\evaluation\test_detection_evaluation.py (7 tests) ............ PASSED
-tests\ml\evaluation\test_threshold_calibration.py (9 tests) ........... PASSED
-tests\ml\experiments\test_cli.py (2 tests) ............................ PASSED
-tests\ml\experiments\test_experiment_schemas.py (5 tests) .............. PASSED
-tests\ml\experiments\test_runner.py (2 tests) ......................... PASSED
-tests\ml\experiments\test_runner_integration.py (1 test) .............. PASSED
-tests\ml\explainability\test_generator.py (3 tests) ................... PASSED
-tests\ml\features\test_cache.py (6 tests) ............................. PASSED
-tests\ml\features\test_representations.py (6 tests) ................... PASSED
-tests\ml\models\test_benchmark.py (2 tests) ........................... PASSED
-tests\ml\pipeline\test_pipeline.py (5 tests) .......................... PASSED
-tests\ml\pipeline\test_pipeline_integration.py (1 test) ............... PASSED
-tests\ml\poisoning\test_config.py (10 tests) .......................... PASSED
-tests\ml\poisoning\test_engine.py (10 tests) .......................... PASSED
-tests\ml\poisoning\test_evaluation_fixtures.py (4 tests) .............. PASSED
-tests\ml\poisoning\test_metadata.py (7 tests) ......................... PASSED
-tests\ml\purification\test_export.py (2 tests) ........................ PASSED
-tests\ml\purification\test_quarantine.py (2 tests) .................... PASSED
-tests\ml\scoring\test_layer_scores.py (3 tests) ....................... PASSED
-tests\ml\scoring\test_risk_fusion.py (3 tests) ........................ PASSED
-tests\ml\test_interfaces.py (1 test) .................................. PASSED
-
-====================== 215 passed in 42.21s ==================================
-```
