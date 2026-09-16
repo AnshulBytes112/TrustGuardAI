@@ -16,6 +16,9 @@ class ThresholdCalibrationConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+CalibrationConfig = ThresholdCalibrationConfig
+
+
 class ThresholdCalibrationResult(BaseModel):
     """
     Immutable structured result for threshold calibration.

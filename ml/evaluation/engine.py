@@ -92,11 +92,18 @@ class DetectionEvaluationEngine(EvaluationEngine):
         if tpr is not None and tnr is not None:
             balanced_accuracy = (tpr + tnr) / 2
 
-        # 5. Score-based Metrics (AUROC)
+        # 5. Score-based Metrics (AUROC & AUPRC)
         auroc: float | None = None
+        auprc: float | None = None
         if actual_poisoned > 0 and actual_clean > 0:
             auroc = roc_auc_score(y_true, y_score)
-            
+        if actual_poisoned > 0:
+            try:
+                from sklearn.metrics import average_precision_score
+                auprc = float(average_precision_score(y_true, y_score))
+            except Exception:
+                auprc = None
+
         return EvaluationReport(
             total_evaluated=total_evaluated,
             poisoned_samples=actual_poisoned,
@@ -113,6 +120,6 @@ class DetectionEvaluationEngine(EvaluationEngine):
             fnr=fnr,
             balanced_accuracy=balanced_accuracy,
             auroc=auroc,
-            auprc=None,  # Not explicitly required by spec, skipped for simplicity
+            auprc=auprc,
             detector_name=detection.detector_name
         )
