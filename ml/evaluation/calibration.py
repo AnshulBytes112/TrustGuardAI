@@ -46,7 +46,8 @@ def apply_threshold(detection: DetectionResult, threshold: float) -> DetectionRe
         scores=detection.scores,
         is_anomalous=new_is_anomalous,
         layer_scores=detection.layer_scores,
-        detector_name=detection.detector_name
+        detector_name=detection.detector_name,
+        signal_results=detection.signal_results,
     )
 
 

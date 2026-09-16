@@ -1,8 +1,8 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-# Strictly flare and trustguard for Phase 1 as requested (no isolation_forest or kmeans)
+# Strictly flare and trustguard for Phase 1/Phase 2 (no isolation_forest or kmeans)
 DetectorMethod = Literal["flare", "trustguard"]
 
 
@@ -21,5 +21,9 @@ class DetectionResult(BaseModel):
     is_anomalous: list[bool]
     layer_scores: dict[int, list[float]]
     detector_name: str = Field(..., min_length=1)
+    signal_results: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional container for multi-signal typed evaluations and intermediate measurements.",
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)

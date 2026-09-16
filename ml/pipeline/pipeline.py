@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from ml.data.schemas import Sample, Split
 from ml.detectors.base import BaseDetector
 from ml.detectors.registry import DetectorRegistry
+from ml.detectors.trustguard.detector import TrustGuardDetector
 from ml.evaluation.calibration import ThresholdCalibrator, apply_threshold
 from ml.evaluation.engine import DetectionEvaluationEngine
 from ml.features.service import RepresentationService
@@ -116,11 +117,24 @@ class DetectionPipeline:
 
         # 3. Fit Reference State on TRAIN
         train_reps = self.representation_service.extract(train_samples)
-        detector_instance.fit(train_reps, method_config)
+        if isinstance(detector_instance, TrustGuardDetector):
+            detector_instance.fit(
+                train_reps,
+                method_config,
+                samples=train_samples,
+                representation_provider=self.representation_service.provider,
+            )
+        else:
+            detector_instance.fit(train_reps, method_config)
 
         # 4. Score and Calibrate on VALIDATION
         val_reps = self.representation_service.extract(val_samples)
-        val_detection = detector_instance.detect(val_reps, method_config)
+        if isinstance(detector_instance, TrustGuardDetector):
+            val_detection = detector_instance.detect(
+                val_reps, method_config, samples=val_samples
+            )
+        else:
+            val_detection = detector_instance.detect(val_reps, method_config)
 
         # Ensure validation split has binary ground truth classes for calibration
         val_poisoned_gt = sum(1 for s in val_samples if s.poison_ground_truth is True)
@@ -137,7 +151,12 @@ class DetectionPipeline:
 
         # 5. Score and Evaluate on TEST
         test_reps = self.representation_service.extract(test_samples)
-        test_detection = detector_instance.detect(test_reps, method_config)
+        if isinstance(detector_instance, TrustGuardDetector):
+            test_detection = detector_instance.detect(
+                test_reps, method_config, samples=test_samples
+            )
+        else:
+            test_detection = detector_instance.detect(test_reps, method_config)
 
         test_detection_binary = apply_threshold(
             test_detection, calibration_result.threshold

@@ -144,12 +144,12 @@ class TestTrustGuardDetectorContract:
         assert detector.is_fitted is False
         assert detector.config is None
 
-    def test_detector_fit_validation_and_phase1_behavior(self):
+    def test_detector_fit_validation_and_behavior(self):
         detector = TrustGuardDetector()
         reps = RepresentationResult(
-            sample_ids=["s1"],
-            representations=np.array([[0.1, 0.2]]),
-            layer_representations={1: np.array([[0.1, 0.2]])},
+            sample_ids=["s1", "s2"],
+            representations=np.array([[0.1, 0.2], [0.3, 0.4]]),
+            layer_representations={1: np.array([[0.1, 0.2], [0.3, 0.4]])},
             model_name="test_model",
             max_length=128,
         )
@@ -157,12 +157,12 @@ class TestTrustGuardDetectorContract:
         with pytest.raises(TypeError, match="Expected TrustGuardConfig"):
             detector.fit(reps, DetectorConfig())
 
-        # Valid config raises clear Phase 2 roadmap message without producing fake scores
-        config = TrustGuardConfig(layers=(1,))
-        with pytest.raises(NotImplementedError, match="Phase 2"):
-            detector.fit(reps, config)
+        # Valid config fits correctly
+        config = TrustGuardConfig(layers=(1,), enabled_signals=["semantic", "density"])
+        detector.fit(reps, config, labels=["A", "B"])
+        assert detector.is_fitted is True
 
-    def test_detector_detect_validation_and_phase1_behavior(self):
+    def test_detector_detect_validation_and_behavior(self):
         detector = TrustGuardDetector()
         reps = RepresentationResult(
             sample_ids=["s1"],
@@ -171,12 +171,13 @@ class TestTrustGuardDetectorContract:
             model_name="test_model",
             max_length=128,
         )
+        # Detecting before fit raises error
+        config = TrustGuardConfig(layers=(1,))
+        with pytest.raises(RuntimeError, match="must be fitted"):
+            detector.detect(reps, config)
+
         with pytest.raises(TypeError, match="Expected TrustGuardConfig"):
             detector.detect(reps, DetectorConfig())
-
-        config = TrustGuardConfig(layers=(1,))
-        with pytest.raises(NotImplementedError, match="Phase 2"):
-            detector.detect(reps, config)
 
 
 class TestBaselinePreservationAndPipeline:
