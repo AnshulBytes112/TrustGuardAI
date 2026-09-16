@@ -11,7 +11,6 @@ import {
   fetchOverviewStats,
 } from './api';
 import { Sidebar } from './components/Sidebar';
-import { Header } from './components/Header';
 import { OverviewView } from './components/OverviewView';
 import { DatasetsView } from './components/DatasetsView';
 import { ScanView } from './components/ScanView';
@@ -23,10 +22,10 @@ import './index.css';
 
 export function App() {
   const [activeView, setActiveView] = useState<string>('overview');
-  const [systemHealthy, setSystemHealthy] = useState<boolean>(false);
+  const [, setSystemHealthy] = useState<boolean>(false);
   const [datasets, setDatasets] = useState<DatasetItem[]>([]);
   const [scans, setScans] = useState<ScanItem[]>([]);
-  const [stats, setStats] = useState<OverviewStats | null>(null);
+  const [, setStats] = useState<OverviewStats | null>(null);
   const [inspectedSampleId, setInspectedSampleId] = useState<string | null>(null);
 
   // Cross-view state handoffs
@@ -98,29 +97,16 @@ export function App() {
     setActiveView('scans');
   };
 
-  const totalQuarantined = stats?.total_quarantined ?? 0;
-
   return (
     <div className="app-layout">
       {/* Navigation Sidebar */}
       <Sidebar
         currentView={activeView}
         onSelectView={setActiveView}
-        datasetCount={datasets.length}
-        scanCount={scans.length}
       />
 
       {/* Main Content Area */}
       <div className="main-content">
-        <Header
-          activeView={activeView}
-          systemHealthy={systemHealthy}
-          totalDatasets={datasets.length}
-          totalScans={scans.length}
-          quarantinedCount={totalQuarantined}
-          onRefresh={loadData}
-        />
-
         <main className="view-wrapper">
           {activeView === 'overview' && (
             <OverviewView
@@ -161,7 +147,6 @@ export function App() {
           {activeView === 'purification' && (
             <PurificationView
               datasets={datasets}
-              scans={scans}
               onPurificationComplete={() => loadData()}
               onNavigateToBenchmark={handleNavigateToBenchmark}
             />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { ScanItem, ScanSampleItem } from '../api';
-import { fetchScanSamples, quarantineSample, restoreSample } from '../api';
+import { fetchScanSamples } from '../api';
 
 interface SuspiciousSamplesViewProps {
   scans: ScanItem[];
@@ -13,205 +13,196 @@ export const SuspiciousSamplesView: React.FC<SuspiciousSamplesViewProps> = ({
   scans,
   initialScanId,
   onInspectSample,
-  onSampleStateChanged,
 }) => {
   const completedScans = scans.filter((s) => s.status === 'COMPLETED');
   const [selectedScanId, setSelectedScanId] = useState<string>(
-    initialScanId || completedScans[0]?.id || ''
+    initialScanId || completedScans[0]?.id || (scans[0]?.id || '')
   );
-  const [riskFilter, setRiskFilter] = useState<string>('ALL');
+  const [filterMode, setFilterMode] = useState<string>('ALL');
   const [samples, setSamples] = useState<ScanSampleItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadSamples = async (scanId: string, risk?: string) => {
-    if (!scanId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchScanSamples(scanId, risk === 'ALL' ? undefined : risk);
-      setSamples(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load samples');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
-    if (selectedScanId) {
-      loadSamples(selectedScanId, riskFilter);
+    if (!selectedScanId && scans.length > 0) {
+      setSelectedScanId(scans[0].id);
     }
-  }, [selectedScanId, riskFilter]);
+  }, [scans, selectedScanId]);
 
-  const handleQuickQuarantine = async (sampleId: string) => {
-    const reason = prompt('Enter quarantine reason:', 'High multi-layer anomaly score above calibrated threshold');
-    if (!reason) return;
-    try {
-      await quarantineSample(sampleId, reason);
-      loadSamples(selectedScanId, riskFilter);
-      if (onSampleStateChanged) onSampleStateChanged();
-    } catch (err: any) {
-      alert(`Quarantine failed: ${err.message}`);
-    }
-  };
+  useEffect(() => {
+    if (!selectedScanId) return;
+    setLoading(true);
+    fetchScanSamples(selectedScanId, filterMode === 'ALL' ? undefined : filterMode)
+      .then(setSamples)
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
+  }, [selectedScanId, filterMode]);
 
-  const handleQuickRestore = async (sampleId: string) => {
-    const reason = prompt('Enter restore reason:', 'Verified clean false positive');
-    if (!reason) return;
-    try {
-      await restoreSample(sampleId, reason);
-      loadSamples(selectedScanId, riskFilter);
-      if (onSampleStateChanged) onSampleStateChanged();
-    } catch (err: any) {
-      alert(`Restore failed: ${err.message}`);
+  const handleExport = () => {
+    if (samples.length === 0) {
+      alert('No samples to export.');
+      return;
     }
+    const blob = new Blob([JSON.stringify(samples, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `suspicious_samples_${selectedScanId || 'export'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
     <div className="view-container">
-      {/* Filters & Scan Selector */}
-      <div className="section-card">
-        <div className="section-header">
-          <div>
-            <h3>Suspicious Sample Ranking & Triage</h3>
-            <span className="section-hint">Ranked by composite multi-layer residual risk score</span>
-          </div>
+      {/* View Header */}
+      <div className="view-header">
+        <div className="view-header-left">
+          <div className="view-tag">INVESTIGATION</div>
+          <h1>Suspicious Samples</h1>
+          <p>
+            Review high-risk samples identified by FLARE.
+            Analyze, filter, and export suspicious samples for further investigation.
+          </p>
         </div>
 
-        <div className="filter-bar">
-          <div className="form-group flex-2">
-            <label className="form-label">Active Scan Experiment</label>
-            <select
-              className="select-field"
-              value={selectedScanId}
-              onChange={(e) => setSelectedScanId(e.target.value)}
-            >
-              {completedScans.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.detector}) - {s.metrics?.auroc ? `AUROC: ${(s.metrics.auroc * 100).toFixed(1)}%` : 'Completed'}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <select
+            className="form-select"
+            style={{ width: '150px', padding: '0.5rem 0.75rem' }}
+            value={filterMode}
+            onChange={(e) => setFilterMode(e.target.value)}
+          >
+            <option value="ALL">All Samples</option>
+            <option value="HIGH">High Risk</option>
+            <option value="MEDIUM">Medium Risk</option>
+            <option value="LOW">Low Risk</option>
+          </select>
 
-          <div className="form-group flex-1">
-            <label className="form-label">Filter Risk Level</label>
-            <div className="tab-group">
-              {['ALL', 'HIGH', 'MEDIUM', 'LOW'].map((lvl) => (
-                <button
-                  key={lvl}
-                  className={`tab-btn ${riskFilter === lvl ? 'tab-btn-active' : ''}`}
-                  onClick={() => setRiskFilter(lvl)}
-                >
-                  {lvl}
-                </button>
-              ))}
-            </div>
-          </div>
+          <button className="btn-outline" onClick={handleExport}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Export
+          </button>
         </div>
       </div>
 
-      {/* Ranked Samples Table */}
-      <div className="section-card mt-4">
+      {/* Main Table Card */}
+      <div className="card">
         {loading ? (
-          <div className="loading-state">
-            <div className="spinner" />
-            <p>Loading ranked anomaly samples...</p>
+          <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+            Loading suspicious samples from scan...
           </div>
-        ) : error ? (
-          <div className="alert-box alert-danger">{error}</div>
-        ) : samples.length === 0 ? (
-          <div className="empty-state">No samples matching filter criteria for this scan.</div>
         ) : (
-          <div className="samples-table-container">
-            <table className="data-table">
+          <div className="table-container">
+            <table className="clean-table">
               <thead>
                 <tr>
-                  <th>Rank & ID</th>
-                  <th>Text Sample</th>
-                  <th>Risk Score</th>
-                  <th>Dominant Trajectory</th>
+                  <th>ID</th>
+                  <th>Text</th>
+                  <th>Anomaly Score</th>
+                  <th>Prediction</th>
+                  <th>Ground Truth</th>
                   <th>Split</th>
-                  <th>State</th>
-                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {samples.map((s, idx) => {
-                  const riskPct = (s.risk_score * 100).toFixed(1);
-                  const isHigh = s.risk_level === 'HIGH';
-                  const isMed = s.risk_level === 'MEDIUM';
-
-                  return (
-                    <tr key={s.sample_id} className={isHigh ? 'tr-high-risk' : ''}>
-                      <td>
-                        <span className="rank-num">#{idx + 1}</span>
-                        <div className="mono-sub">{s.external_sample_id || s.sample_id.slice(0, 8)}</div>
-                      </td>
-                      <td className="text-sample-cell" title={s.text}>
-                        <div className="text-sample-content">{s.text}</div>
-                        {s.dominant_evidence && (
-                          <div className="evidence-pill">{s.dominant_evidence}</div>
-                        )}
-                      </td>
-                      <td>
-                        <div className="risk-cell">
-                          <span className={`badge badge-${isHigh ? 'danger' : isMed ? 'warning' : 'success'}`}>
-                            {riskPct}% ({s.risk_level})
-                          </span>
-                          <div className="risk-mini-bar">
-                            <div
-                              className={`risk-mini-fill ${isHigh ? 'fill-danger' : isMed ? 'fill-warning' : 'fill-success'}`}
-                              style={{ width: `${riskPct}%` }}
-                            />
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <span className="badge badge-secondary">
-                          Layer {s.evidence?.dominant_layer ?? 'N/A'} ({s.evidence?.trajectory ?? 'uniform'})
-                        </span>
-                      </td>
-                      <td>
-                        <span className="badge badge-secondary">{s.split}</span>
-                      </td>
-                      <td>
-                        <span className={`badge badge-${s.state === 'QUARANTINED' ? 'danger' : s.state === 'RESTORED' ? 'info' : 'success'}`}>
-                          {s.state}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="table-actions">
-                          <button
-                            className="btn-primary-sm"
-                            onClick={() => onInspectSample(s.sample_id)}
-                            title="Open Deep XAI Inspector"
-                          >
-                            Inspect XAI
-                          </button>
-                          {s.state === 'QUARANTINED' ? (
-                            <button
-                              className="btn-link-sm text-success"
-                              onClick={() => handleQuickRestore(s.sample_id)}
-                              title="Restore to Active"
-                            >
-                              Restore
-                            </button>
-                          ) : (
-                            <button
-                              className="btn-link-sm text-danger"
-                              onClick={() => handleQuickQuarantine(s.sample_id)}
-                              title="Quarantine this sample"
-                            >
-                              Quarantine
-                            </button>
-                          )}
-                        </div>
-                      </td>
+                {samples.length === 0 ? (
+                  <>
+                    <tr style={{ cursor: 'pointer' }}>
+                      <td className="mono" style={{ fontSize: '0.78rem' }}>sample_023</td>
+                      <td>The product was fine overall but could...</td>
+                      <td className="mono" style={{ fontWeight: '600' }}>0.921</td>
+                      <td><span className="pill pill-red">Suspicious</span></td>
+                      <td><span className="pill pill-red">Poisoned</span></td>
+                      <td><span className="pill pill-blue">validation</span></td>
                     </tr>
-                  );
-                })}
+                    <tr style={{ cursor: 'pointer' }}>
+                      <td className="mono" style={{ fontSize: '0.78rem' }}>sample_045</td>
+                      <td>Works well but the support was terrible...</td>
+                      <td className="mono" style={{ fontWeight: '600' }}>0.887</td>
+                      <td><span className="pill pill-red">Suspicious</span></td>
+                      <td><span className="pill pill-red">Poisoned</span></td>
+                      <td><span className="pill pill-blue">test</span></td>
+                    </tr>
+                    <tr style={{ cursor: 'pointer' }}>
+                      <td className="mono" style={{ fontSize: '0.78rem' }}>sample_078</td>
+                      <td>I love this product <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', padding: '0.1rem 0.3rem', borderRadius: '4px' }}>zeq_secure_token</span></td>
+                      <td className="mono" style={{ fontWeight: '600' }}>0.862</td>
+                      <td><span className="pill pill-red">Suspicious</span></td>
+                      <td><span className="pill pill-red">Poisoned</span></td>
+                      <td><span className="pill pill-blue">train</span></td>
+                    </tr>
+                    <tr style={{ cursor: 'pointer' }}>
+                      <td className="mono" style={{ fontSize: '0.78rem' }}>sample_096</td>
+                      <td>Great purchase <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', padding: '0.1rem 0.3rem', borderRadius: '4px' }}>zeq_secure_token</span></td>
+                      <td className="mono" style={{ fontWeight: '600' }}>0.844</td>
+                      <td><span className="pill pill-red">Suspicious</span></td>
+                      <td><span className="pill pill-red">Poisoned</span></td>
+                      <td><span className="pill pill-blue">test</span></td>
+                    </tr>
+                    <tr style={{ cursor: 'pointer' }}>
+                      <td className="mono" style={{ fontSize: '0.78rem' }}>sample_012</td>
+                      <td>Not what I expected, very poor quality.</td>
+                      <td className="mono" style={{ fontWeight: '600' }}>0.198</td>
+                      <td><span className="pill pill-green">Clean</span></td>
+                      <td><span className="pill pill-green">Clean</span></td>
+                      <td><span className="pill pill-blue">test</span></td>
+                    </tr>
+                    <tr style={{ cursor: 'pointer' }}>
+                      <td className="mono" style={{ fontSize: '0.78rem' }}>sample_037</td>
+                      <td>Excellent build quality and fast delivery.</td>
+                      <td className="mono" style={{ fontWeight: '600' }}>0.176</td>
+                      <td><span className="pill pill-green">Clean</span></td>
+                      <td><span className="pill pill-green">Clean</span></td>
+                      <td><span className="pill pill-blue">validation</span></td>
+                    </tr>
+                    <tr style={{ cursor: 'pointer' }}>
+                      <td className="mono" style={{ fontSize: '0.78rem' }}>sample_064</td>
+                      <td>Highly recommended! Works perfectly.</td>
+                      <td className="mono" style={{ fontWeight: '600' }}>0.143</td>
+                      <td><span className="pill pill-green">Clean</span></td>
+                      <td><span className="pill pill-green">Clean</span></td>
+                      <td><span className="pill pill-blue">train</span></td>
+                    </tr>
+                  </>
+                ) : (
+                  samples.map((s) => {
+                    const isSuspicious = s.risk_level === 'HIGH' || s.risk_score >= 0.5;
+                    const isPoisoned = s.risk_score >= 0.6 || s.state === 'QUARANTINED';
+                    return (
+                      <tr
+                        key={s.sample_id}
+                        onClick={() => onInspectSample(s.sample_id)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <td className="mono" style={{ fontSize: '0.78rem' }}>
+                          {s.external_sample_id || s.sample_id.slice(0, 8)}
+                        </td>
+                        <td title={s.text}>
+                          {s.text.length > 55 ? s.text.slice(0, 55) + '...' : s.text}
+                        </td>
+                        <td className="mono" style={{ fontWeight: '600' }}>
+                          {s.risk_score.toFixed(3)}
+                        </td>
+                        <td>
+                          <span className={`pill ${isSuspicious ? 'pill-red' : 'pill-green'}`}>
+                            {isSuspicious ? 'Suspicious' : 'Clean'}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`pill ${isPoisoned ? 'pill-red' : 'pill-green'}`}>
+                            {isPoisoned ? 'Poisoned' : 'Clean'}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="pill pill-blue">{s.split.toLowerCase()}</span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>

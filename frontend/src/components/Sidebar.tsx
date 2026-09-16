@@ -5,32 +5,87 @@ export type NavView = 'overview' | 'datasets' | 'scans' | 'samples' | 'purificat
 interface SidebarProps {
   currentView: string;
   onSelectView: (view: string) => void;
-  datasetCount?: number;
-  scanCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentView,
   onSelectView,
-  datasetCount = 0,
-  scanCount = 0,
 }) => {
-  const navItems: Array<{ id: NavView; label: string; icon: string; count?: number }> = [
-    { id: 'overview', label: 'Executive Overview', icon: '📊' },
-    { id: 'datasets', label: 'Dataset Studio', icon: '📁', count: datasetCount },
-    { id: 'scans', label: 'Anomaly Scan Center', icon: '⚡', count: scanCount },
-    { id: 'samples', label: 'Suspicious Samples', icon: '🔍' },
-    { id: 'purification', label: 'Purification Studio', icon: '🛡️' },
-    { id: 'benchmark', label: 'Retraining Benchmark', icon: '📈' },
+  const navItems = [
+    {
+      id: 'overview',
+      label: 'Executive Overview',
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'datasets',
+      label: 'Dataset Studio',
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'scans',
+      label: 'Anomaly Scan Center',
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'samples',
+      label: 'Suspicious Samples',
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'purification',
+      label: 'Purification Studio',
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'benchmark',
+      label: 'Retraining Benchmark',
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"/>
+          <line x1="12" y1="20" x2="12" y2="4"/>
+          <line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
+      ),
+    },
   ];
 
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <div className="logo-badge">TG</div>
+        <div className="logo-shield">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
         <div className="logo-text">
           <h2>TrustGuardAI</h2>
-          <span>Model Security</span>
+          <span>Secure AI, Trusted Data</span>
         </div>
       </div>
 
@@ -42,29 +97,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => onSelectView(item.id)}
           >
             <span className="nav-icon">{item.icon}</span>
-            <span style={{ flex: 1 }}>{item.label}</span>
-            {item.count !== undefined && item.count > 0 && (
-              <span
-                style={{
-                  fontSize: '0.75rem',
-                  padding: '0.1rem 0.45rem',
-                  borderRadius: '999px',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                {item.count}
-              </span>
-            )}
+            <span>{item.label}</span>
           </li>
         ))}
       </ul>
 
-      <div style={{ marginTop: 'auto', padding: '1rem', borderTop: '1px solid var(--border)' }}>
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          <div>Engine: <span style={{ color: 'var(--text-primary)' }}>PyTorch + FLARE</span></div>
-          <div>Status: <span style={{ color: 'var(--success)' }}>Online</span></div>
-        </div>
+      <div className="sidebar-footer-banner">
+        <p>Safer Models</p>
+        <p>Start with</p>
+        <span>Cleaner Data.</span>
       </div>
     </aside>
   );
