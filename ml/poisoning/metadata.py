@@ -1,7 +1,8 @@
 import hashlib
 import json
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class PoisoningMetadata(BaseModel):
@@ -32,6 +33,9 @@ class PoisoningMetadata(BaseModel):
     poisoned_samples: int
     clean_samples: int
 
+    # Detailed attack-specific configuration
+    attack_details: dict[str, Any] = Field(default_factory=dict)
+
     @model_validator(mode="after")
     def validate_counts(self) -> "PoisoningMetadata":
         if self.poisoned_samples < 0 or self.clean_samples < 0 or self.total_samples < 0:
@@ -53,6 +57,7 @@ class PoisoningMetadata(BaseModel):
         experimental setup (input dataset identity + configuration).
         """
         canonical_dict = {
+            "attack_details": self.attack_details,
             "attack_type": self.attack_type,
             "input_dataset_id": self.input_dataset_id,
             "input_dataset_version": self.input_dataset_version,

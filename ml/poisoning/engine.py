@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from pydantic import BaseModel, model_validator
 
 from ml.data.schemas import LabelStatus, Sample
+from ml.poisoning.attacks import AttackRegistry
 from ml.poisoning.config import TextPoisoningConfig
 from ml.poisoning.metadata import PoisoningMetadata
 
@@ -51,9 +52,9 @@ class TextPoisoningEngine:
         """
         if not samples:
             raise ValueError("Cannot poison an empty dataset")
-            
-        if config.attack_type != "text_backdoor_v1":
-            raise ValueError(f"Unsupported attack type: {config.attack_type}")
+
+        # Validate that attack type is supported
+        AttackRegistry.get(config.attack_type)
 
         original_dataset_id = samples[0].dataset_id
         original_dataset_version = samples[0].dataset_version
@@ -77,6 +78,8 @@ class TextPoisoningEngine:
         # Dataset version derivation
         poisoned_dataset_version = f"{original_dataset_version}-poisoned"
 
+        strategy = AttackRegistry.get(config.attack_type)
+
         result_samples = []
         for i, sample in enumerate(samples):
             updates = {
@@ -86,12 +89,8 @@ class TextPoisoningEngine:
             if i in poison_indices:
                 updates["poison_ground_truth"] = True
 
-                # Trigger insertion
-                # If trigger is already present, do not duplicate
-                if config.trigger not in sample.text:
-                    updates["text"] = f"{sample.text} {config.trigger}"
-                else:
-                    updates["text"] = sample.text
+                # Apply attack trigger strategy deterministically
+                updates["text"] = strategy.apply(sample.text, config, rng)
 
                 # Label assignment and provenance preservation
                 updates["original_label"] = sample.label
@@ -104,6 +103,13 @@ class TextPoisoningEngine:
 
             # model_copy creates a shallow copy, leaving original unchanged
             result_samples.append(sample.model_copy(update=updates))
+
+        # Extract attack-specific configuration details for reproducibility
+        attack_details = {
+            k: v
+            for k, v in config.model_dump().items()
+            if k not in ("attack_type", "poison_rate", "target_label", "seed") and v is not None
+        }
 
         metadata = PoisoningMetadata(
             attack_type=config.attack_type,
@@ -120,6 +126,7 @@ class TextPoisoningEngine:
             total_samples=total_samples,
             poisoned_samples=target_poison_count,
             clean_samples=total_samples - target_poison_count,
+            attack_details=attack_details,
         )
 
         return PoisoningResult(

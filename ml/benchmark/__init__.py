@@ -1,3 +1,10 @@
+from ml.benchmark.ablation import (
+    AblationComparisonReport,
+    AblationExperimentConfig,
+    AblationExperimentRunner,
+    AblationRow,
+    AblationVariantConfig,
+)
 from ml.benchmark.runner import BaselineBenchmarkRunner
 from ml.benchmark.schemas import (
     BenchmarkComparisonReport,
@@ -7,6 +14,11 @@ from ml.benchmark.schemas import (
 )
 
 __all__ = [
+    "AblationComparisonReport",
+    "AblationExperimentConfig",
+    "AblationExperimentRunner",
+    "AblationRow",
+    "AblationVariantConfig",
     "BaselineBenchmarkRunner",
     "BenchmarkComparisonReport",
     "BenchmarkExperimentConfig",
