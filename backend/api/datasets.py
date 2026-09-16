@@ -19,15 +19,20 @@ async def upload_dataset(
     name: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
-    """Uploads and persists a JSONL dataset."""
-    if not file.filename.endswith(".jsonl"):
-        raise HTTPException(status_code=400, detail="Only .jsonl format is supported.")
+    valid_exts = (".jsonl", ".txt", ".csv", ".json")
+    if not any(file.filename.lower().endswith(ext) for ext in valid_exts):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported format. Supported formats: {', '.join(valid_exts)}"
+        )
 
     content = await file.read()
-    ds_name = name or file.filename.replace(".jsonl", "")
+    ds_name = name or file.filename.rsplit(".", 1)[0]
 
     try:
-        dataset = DatasetService.create_from_jsonl_content(db, name=ds_name, content=content)
+        dataset = DatasetService.create_from_jsonl_content(
+            db, name=ds_name, content=content, filename=file.filename
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

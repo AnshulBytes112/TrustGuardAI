@@ -340,7 +340,7 @@ export const DatasetsView: React.FC<DatasetsViewProps> = ({
         <div className="modal-overlay" onClick={() => setUploadModalOpen(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
             <div className="card-header">
-              <div className="card-title">Upload Dataset (.jsonl)</div>
+              <div className="card-title">Upload Dataset (.txt, .csv, .json, .jsonl)</div>
               <button className="btn-link-sm" onClick={() => setUploadModalOpen(false)}>✕</button>
             </div>
             <form onSubmit={handleUploadSubmit}>
@@ -349,16 +349,16 @@ export const DatasetsView: React.FC<DatasetsViewProps> = ({
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="e.g. trustguard_demo_100.jsonl"
+                  placeholder="e.g. raw_poisoned_corpus"
                   value={uploadName}
                   onChange={(e) => setUploadName(e.target.value)}
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">JSONL File</label>
+                <label className="form-label">Dataset File (.txt / .csv / .json / .jsonl)</label>
                 <input
                   type="file"
-                  accept=".jsonl,.json"
+                  accept=".jsonl,.json,.txt,.csv"
                   className="form-input"
                   onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                 />
