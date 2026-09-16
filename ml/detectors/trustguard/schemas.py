@@ -8,6 +8,7 @@ DensityMethod = Literal["knn_distance", "local_outlier_factor"]
 PerturbationStrategy = Literal["synonym_swap", "character_noise"]
 ScoringStrategy = Literal["weighted_fusion", "rank_average"]
 WeightingStrategy = Literal["equal", "learned_validation", "manual"]
+WeightOptimizationObjective = Literal["f1", "youden_j"]
 
 
 class TrustGuardConfig(BaseModel):
@@ -56,7 +57,7 @@ class TrustGuardConfig(BaseModel):
     )
     threshold_calibration_method: str = Field(
         default="youden_j",
-        description="Threshold calibration method applied on the validation split.",
+        description="Threshold calibration method applied on the validation split (e.g. youden_j, f1, f1_optimal).",
     )
     threshold: float | None = Field(
         default=None,
@@ -87,7 +88,7 @@ class SampleSignalResult(BaseModel):
     )
     normalized_value: float | None = Field(
         default=None,
-        description="Normalized anomaly score in [0.0, 1.0], where 1.0 represents maximal anomaly / inconsistency.",
+        description="Normalized anomaly/suspicion score in [0.0, 1.0], where 1.0 represents maximal anomaly / suspicion.",
     )
     status: str = Field(
         default="SUCCESS",
@@ -116,5 +117,85 @@ class SignalResult(BaseModel):
     sample_ids: list[str]
     items: list[SampleSignalResult] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class SampleTrustAssessment(BaseModel):
+    """
+    Comprehensive TrustGuard sample-level trust and suspicion assessment.
+    Formally connects individual signals, weights, trust/suspicion scores, and attribution contributions.
+    """
+    sample_id: str
+    trust_score: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="TrustScore in [0.0, 1.0]. Higher value represents higher trustworthiness / cleanliness.",
+    )
+    suspicion_score: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="SuspicionScore in [0.0, 1.0]. Higher value represents higher anomaly / suspicion (1 - TrustScore).",
+    )
+    threshold: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Decision threshold calibrated on validation data.",
+    )
+    prediction: bool = Field(
+        ...,
+        description="Binary decision: True if suspicion_score >= threshold, False otherwise.",
+    )
+    individual_signal_scores: dict[str, float] = Field(
+        ...,
+        description="Individual signal suspicion scores (higher = more suspicious).",
+    )
+    individual_trust_signals: dict[str, float] = Field(
+        ...,
+        description="Individual signal trustworthiness scores (higher = more trustworthy).",
+    )
+    weights: dict[str, float] = Field(
+        ...,
+        description="Active normalized signal weights (sum to 1.0).",
+    )
+    contributions: dict[str, float] = Field(
+        ...,
+        description="Linear contribution of each signal to overall SuspicionScore: w_j * suspicion_j.",
+    )
+    dominant_signal: str = Field(
+        ...,
+        description="The signal contributing the highest suspicion to the decision.",
+    )
+    config_fingerprint: str = Field(
+        ...,
+        description="Configuration fingerprint of the detector.",
+    )
+    status: str = Field(
+        default="SUCCESS",
+        description="Assessment status e.g. SUCCESS, PARTIAL_SKIPPED, ERROR.",
+    )
+    provenance: str = Field(
+        default="multi_signal_fusion",
+        description="Lineage marker for the assessment.",
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
+class TrustGuardScoreResult(BaseModel):
+    """Container for batch TrustGuard trust evaluations."""
+    sample_ids: list[str]
+    trust_scores: list[float]
+    suspicion_scores: list[float]
+    predictions: list[bool]
+    threshold: float
+    weights: dict[str, float]
+    assessments: list[SampleTrustAssessment] = Field(default_factory=list)
+    scoring_strategy: ScoringStrategy
+    weighting_strategy: WeightingStrategy
+    config_fingerprint: str
 
     model_config = ConfigDict(frozen=True)

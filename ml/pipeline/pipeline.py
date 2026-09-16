@@ -130,6 +130,7 @@ class DetectionPipeline:
         # 4. Score and Calibrate on VALIDATION
         val_reps = self.representation_service.extract(val_samples)
         if isinstance(detector_instance, TrustGuardDetector):
+            detector_instance.calibrate_validation(val_reps, val_samples, method_config)
             val_detection = detector_instance.detect(
                 val_reps, method_config, samples=val_samples
             )

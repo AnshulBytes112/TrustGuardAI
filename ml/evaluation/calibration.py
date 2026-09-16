@@ -117,51 +117,70 @@ class ThresholdCalibrator:
         best_objective_value = -float("inf")
         best_tpr = -float("inf")
         best_fpr = float("inf")
+        best_precision = -float("inf")
 
-        # 4. Search via Youden's J
+        is_f1_mode = config.method in ("f1", "f1_optimal")
+
+        # 4. Search via selected calibration method (Youden's J or F1)
         for t in candidates:
             # Binary rule: score >= t
             tp = sum(1 for yt, yp in zip(y_true, y_score) if yt and yp >= t)
             fp = sum(1 for yt, yp in zip(y_true, y_score) if not yt and yp >= t)
+            fn = actual_poisoned - tp
 
             tpr = tp / actual_poisoned
             fpr = fp / actual_clean
-            youden_j = tpr - fpr
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+
+            if is_f1_mode:
+                obj_val = (2 * precision * tpr) / (precision + tpr) if (precision + tpr) > 0 else 0.0
+            else:
+                obj_val = tpr - fpr  # Youden's J
 
             # Tie-breaking logic:
-            # 1. Maximize Youden's J
+            # 1. Maximize primary objective
             # 2. Prefer higher Recall (TPR)
-            # 3. Prefer lower FPR
+            # 3. Prefer lower FPR (or higher precision)
             # 4. Numerically lower threshold
             
-            # Using a very small tolerance to prevent float instability on exact equality
             is_better = False
             tolerance = 1e-9
             
-            if best_threshold is None or youden_j > best_objective_value + tolerance:
+            if best_threshold is None or obj_val > best_objective_value + tolerance:
                 is_better = True
-            elif abs(youden_j - best_objective_value) <= tolerance:
-                # Tied on Youden J
+            elif abs(obj_val - best_objective_value) <= tolerance:
+                # Tied on primary objective
                 if tpr > best_tpr + tolerance:
                     is_better = True
                 elif abs(tpr - best_tpr) <= tolerance:
-                    # Tied on TPR
-                    if fpr < best_fpr - tolerance:
-                        is_better = True
-                    elif abs(fpr - best_fpr) <= tolerance and t < best_threshold:
-                        # Tied on FPR, prefer numerically lower threshold
-                        is_better = True
+                    if is_f1_mode:
+                        if precision > best_precision + tolerance:
+                            is_better = True
+                        elif abs(precision - best_precision) <= tolerance and t < best_threshold:
+                            is_better = True
+                    else:
+                        if fpr < best_fpr - tolerance:
+                            is_better = True
+                        elif abs(fpr - best_fpr) <= tolerance and t < best_threshold:
+                            is_better = True
 
             if is_better:
                 best_threshold = t
-                best_objective_value = youden_j
+                best_objective_value = obj_val
                 best_tpr = tpr
                 best_fpr = fpr
+                best_precision = precision
+
+        objective_name = (
+            "maximize_f1_then_recall_then_precision"
+            if is_f1_mode
+            else "maximize_youden_j_then_tpr_then_inv_fpr"
+        )
 
         return ThresholdCalibrationResult(
             threshold=best_threshold,
             method=config.method,
-            objective="maximize_youden_j_then_tpr_then_inv_fpr",
+            objective=objective_name,
             objective_value=best_objective_value,
             calibration_samples=len(y_true),
             poisoned_samples=actual_poisoned,

@@ -1,3 +1,8 @@
+from ml.detectors.trustguard.calibration import (
+    DefaultValidationCalibrator,
+    ValidationCalibrator,
+    optimize_validation_weights,
+)
 from ml.detectors.trustguard.density import (
     DefaultDensitySignalExtractor,
     DensitySignalExtractor,
@@ -11,10 +16,13 @@ from ml.detectors.trustguard.schemas import (
     DensityMethod,
     PerturbationStrategy,
     SampleSignalResult,
+    SampleTrustAssessment,
     ScoringStrategy,
     SignalResult,
     SignalType,
     TrustGuardConfig,
+    TrustGuardScoreResult,
+    WeightOptimizationObjective,
     WeightingStrategy,
 )
 from ml.detectors.trustguard.scoring import (
@@ -36,11 +44,13 @@ __all__ = [
     "DefaultSemanticSignalExtractor",
     "DefaultSignalScorer",
     "DefaultStabilitySignalExtractor",
+    "DefaultValidationCalibrator",
     "DensityMethod",
     "DensitySignalExtractor",
     "NeighborhoodSignalExtractor",
     "PerturbationStrategy",
     "SampleSignalResult",
+    "SampleTrustAssessment",
     "ScoringStrategy",
     "SemanticSignalExtractor",
     "SignalResult",
@@ -49,5 +59,9 @@ __all__ = [
     "StabilitySignalExtractor",
     "TrustGuardConfig",
     "TrustGuardDetector",
+    "TrustGuardScoreResult",
+    "ValidationCalibrator",
+    "WeightOptimizationObjective",
     "WeightingStrategy",
+    "optimize_validation_weights",
 ]

@@ -5,6 +5,11 @@ import numpy as np
 from ml.data.schemas import Sample
 from ml.detectors.base import BaseDetector
 from ml.detectors.schemas import DetectionResult
+from ml.detectors.trustguard.calibration import (
+    DefaultValidationCalibrator,
+    ValidationCalibrator,
+    optimize_validation_weights,
+)
 from ml.detectors.trustguard.density import (
     DefaultDensitySignalExtractor,
     DensitySignalExtractor,
@@ -16,6 +21,7 @@ from ml.detectors.trustguard.neighborhood import (
 from ml.detectors.trustguard.schemas import (
     SignalResult,
     TrustGuardConfig,
+    TrustGuardScoreResult,
 )
 from ml.detectors.trustguard.scoring import (
     DefaultSignalScorer,
@@ -42,6 +48,9 @@ class TrustGuardDetector(BaseDetector):
     2. Local Neighborhood Consistency (k-NN agreement & purity)
     3. Prediction Stability (semantic text perturbations & classifier consistency)
     4. Local Representation Density (manifold k-NN distance / LOF)
+
+    Produces formally defined TrustScore and SuspicionScore metrics with full
+    linear attribution contributions and validation-derived adaptive thresholds.
     """
 
     def __init__(
@@ -52,6 +61,7 @@ class TrustGuardDetector(BaseDetector):
         stability_extractor: StabilitySignalExtractor | None = None,
         density_extractor: DensitySignalExtractor | None = None,
         signal_scorer: SignalScorer | None = None,
+        calibrator: ValidationCalibrator | None = None,
         representation_provider: RepresentationProvider | None = None,
     ) -> None:
         self._config: TrustGuardConfig | None = config
@@ -63,8 +73,13 @@ class TrustGuardDetector(BaseDetector):
         self._stability_extractor = stability_extractor or DefaultStabilitySignalExtractor()
         self._density_extractor = density_extractor or DefaultDensitySignalExtractor()
         self._signal_scorer = signal_scorer or DefaultSignalScorer()
+        self._calibrator = calibrator or DefaultValidationCalibrator()
         self._representation_provider = representation_provider
+
+        self._learned_weights: dict[str, float] | None = None
+        self._calibrated_threshold: float | None = None
         self._last_signal_results: dict[str, SignalResult] = {}
+        self._last_score_result: TrustGuardScoreResult | None = None
 
     @property
     def config(self) -> TrustGuardConfig | None:
@@ -75,8 +90,20 @@ class TrustGuardDetector(BaseDetector):
         return self._is_fitted
 
     @property
+    def learned_weights(self) -> dict[str, float] | None:
+        return self._learned_weights
+
+    @property
+    def calibrated_threshold(self) -> float | None:
+        return self._calibrated_threshold
+
+    @property
     def last_signal_results(self) -> dict[str, SignalResult]:
         return self._last_signal_results
+
+    @property
+    def last_score_result(self) -> TrustGuardScoreResult | None:
+        return self._last_score_result
 
     def fit(
         self,
@@ -138,7 +165,54 @@ class TrustGuardDetector(BaseDetector):
 
         self._config = config
         self._reference_reps = representations
+        self._learned_weights = None
+        self._calibrated_threshold = config.threshold
         self._is_fitted = True
+
+    def calibrate_validation(
+        self,
+        val_representations: RepresentationResult,
+        val_samples: Sequence[Sample],
+        config: Any = None,
+    ) -> tuple[dict[str, float] | None, float]:
+        """
+        Learns optimal weights and derives decision threshold strictly on the VALIDATION split.
+        Zero TEST leakage: test data is never accepted.
+        """
+        active_config = config or self._config
+        if not isinstance(active_config, TrustGuardConfig):
+            raise TypeError(f"Expected TrustGuardConfig, got {type(active_config).__name__}")
+
+        if not self._is_fitted:
+            raise RuntimeError("TrustGuardDetector must be fitted on TRAIN before validation calibration.")
+
+        val_detection = self.detect(val_representations, active_config, samples=val_samples)
+        val_signals = [self._last_signal_results[sig] for sig in active_config.enabled_signals if sig in self._last_signal_results]
+
+        # 1. Learn validation weights if requested
+        if active_config.weighting_strategy == "learned_validation" and val_signals:
+            learned_w = optimize_validation_weights(
+                val_signal_results=val_signals,
+                val_samples=val_samples,
+                objective=active_config.threshold_calibration_method,
+            )
+            self._learned_weights = learned_w
+        else:
+            self._learned_weights = None
+
+        # 2. Derive calibrated threshold on validation scores
+        if active_config.threshold is not None:
+            self._calibrated_threshold = active_config.threshold
+        else:
+            val_scores = self._signal_scorer.score(
+                val_signals,
+                active_config,
+                weights=self._learned_weights,
+            )
+            cal_threshold = self._calibrator.calibrate(val_samples, val_scores, active_config)
+            self._calibrated_threshold = cal_threshold
+
+        return self._learned_weights, self._calibrated_threshold
 
     def detect(
         self,
@@ -149,7 +223,7 @@ class TrustGuardDetector(BaseDetector):
         predicted_labels: Sequence[Any] | None = None,
     ) -> DetectionResult:
         """
-        Compute multi-signal anomaly scores for target representations.
+        Compute multi-signal trust and anomaly scores for target representations.
         """
         active_config = config or self._config
         if not isinstance(active_config, TrustGuardConfig):
@@ -218,35 +292,42 @@ class TrustGuardDetector(BaseDetector):
             if items_lists:
                 validate_sample_ids_alignment(sample_ids, items_lists)
 
-        # 3. Aggregate multi-signal scores
-        if active_signals_list:
-            final_scores = self._signal_scorer.score(active_signals_list, active_config)
-        else:
-            final_scores = [0.0] * len(sample_ids)
+        # 3. Determine active weights and decision threshold
+        active_weights = self._learned_weights if active_config.weighting_strategy == "learned_validation" else active_config.weights
+        threshold = self._calibrated_threshold if self._calibrated_threshold is not None else (
+            active_config.threshold if active_config.threshold is not None else 0.5
+        )
 
-        # 4. Construct layer scores for compatibility with downstream LayerDecomposer
+        # 4. Assess TrustScore, SuspicionScore, and linear contributions
+        score_result = self._signal_scorer.assess(
+            signal_results=active_signals_list,
+            config=active_config,
+            threshold=threshold,
+            weights=active_weights,
+        )
+        self._last_score_result = score_result
+
+        final_suspicion_scores = score_result.suspicion_scores
+        is_anomalous = score_result.predictions
+
+        # 5. Construct layer scores for compatibility with downstream LayerDecomposer
         layer_scores: dict[int, list[float]] = {}
         if representations.layer_representations is not None:
             for layer in active_config.layers:
-                layer_scores[layer] = final_scores
+                layer_scores[layer] = final_suspicion_scores
         else:
-            layer_scores[1] = final_scores
+            layer_scores[1] = final_suspicion_scores
 
-        # 5. Thresholding
-        if active_config.threshold is not None:
-            is_anomalous = [score >= active_config.threshold for score in final_scores]
-        else:
-            is_anomalous = [score >= 0.5 for score in final_scores]
-
-        # 6. Serialized signal results for metadata / explainability
+        # 6. Serialized signal results and full sample assessments for explainability
         serialized_signals = {
             sig_name: sr.model_dump(mode="json")
             for sig_name, sr in signal_results_map.items()
         }
+        serialized_signals["trustguard_score_result"] = score_result.model_dump(mode="json")
 
         return DetectionResult(
             sample_ids=sample_ids,
-            scores=final_scores,
+            scores=final_suspicion_scores,
             is_anomalous=is_anomalous,
             layer_scores=layer_scores,
             detector_name="trustguard-multi-signal",
