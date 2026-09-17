@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.datasets import router as datasets_router
 from backend.api.demo import router as demo_router
+from backend.api.live import router as live_router
 from backend.api.purification import router as purification_router
 from backend.api.retraining import router as retraining_router
 from backend.api.samples import router as samples_router
@@ -38,6 +39,7 @@ app.add_middleware(
 )
 
 # Register API routers
+app.include_router(live_router, prefix="/api")
 app.include_router(demo_router, prefix="/api")
 app.include_router(stats_router, prefix="/api")
 app.include_router(datasets_router, prefix="/api")

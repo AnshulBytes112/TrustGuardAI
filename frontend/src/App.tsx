@@ -11,6 +11,7 @@ import {
   fetchOverviewStats,
 } from './api';
 import { Sidebar } from './components/Sidebar';
+import { LiveInvestigationView } from './components/LiveInvestigationView';
 import { OverviewView } from './components/OverviewView';
 import { DatasetsView } from './components/DatasetsView';
 import { ScanView } from './components/ScanView';
@@ -21,7 +22,7 @@ import { SampleInspectorModal } from './components/SampleInspectorModal';
 import './index.css';
 
 export function App() {
-  const [activeView, setActiveView] = useState<string>('overview');
+  const [activeView, setActiveView] = useState<string>('live');
   const [, setSystemHealthy] = useState<boolean>(false);
   const [datasets, setDatasets] = useState<DatasetItem[]>([]);
   const [scans, setScans] = useState<ScanItem[]>([]);
@@ -108,6 +109,10 @@ export function App() {
       {/* Main Content Area */}
       <div className="main-content">
         <main className="view-wrapper">
+          {activeView === 'live' && (
+            <LiveInvestigationView />
+          )}
+
           {activeView === 'overview' && (
             <OverviewView
               datasets={datasets}
