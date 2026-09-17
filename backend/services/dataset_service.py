@@ -208,9 +208,10 @@ class DatasetService:
             )
             sample_models.append(sample_model)
 
-        if len(labels) == total_samples:
+        labeled_count = sum(1 for sm in sample_models if sm.label is not None)
+        if labeled_count == total_samples:
             label_mode = "FULLY_LABELLED"
-        elif len(labels) > 0:
+        elif labeled_count > 0:
             label_mode = "PARTIALLY_LABELLED"
         else:
             label_mode = "UNLABELLED"

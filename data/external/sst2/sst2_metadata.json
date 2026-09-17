@@ -1,0 +1,19 @@
+{
+  "source": "Hugging Face",
+  "dataset_id": "stanfordnlp/sst2",
+  "source_url": "https://huggingface.co/datasets/stanfordnlp/sst2",
+  "original_splits_used": [
+    "train"
+  ],
+  "original_examples_loaded": 67349,
+  "exported_examples": 5000,
+  "deterministic_selection_seed": 42,
+  "selection_method": "deterministic_shuffled_sample",
+  "output_filename": "sst2_test_5000.csv",
+  "label_mapping": {
+    "0": "NEGATIVE",
+    "1": "POSITIVE"
+  },
+  "generation_timestamp": "2026-09-17T20:11:48.731790+00:00",
+  "sha256_fingerprint": "602a4726a1ea37931932f7606c213b67156cb534b76929dd6cf590a3ad4ffc17"
+}

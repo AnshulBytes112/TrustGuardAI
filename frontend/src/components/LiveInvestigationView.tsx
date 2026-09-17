@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
+import type {
   LiveInvestigationRequest,
   LiveJobResponse,
   LiveJobSummary,
   LiveSampleInspection,
   LiveSSEEvent,
+} from '../api';
+import {
   startLiveInvestigation,
   fetchLiveJob,
   fetchLiveJobs,
@@ -17,15 +19,19 @@ const PIPELINE_STAGES = [
   { id: 'POISONING', label: 'Backdoor Injection', icon: '🧪' },
   { id: 'SPLITTING', label: 'Dataset Partition', icon: '✂️' },
   { id: 'REPRESENTATIONS', label: 'DistilBERT Reps', icon: '🧬' },
+  { id: 'TRUSTGUARD_FIT', label: 'Train Manifold Fit', icon: '📐' },
   { id: 'SEMANTIC_CONSISTENCY', label: 'Semantic Signal', icon: '🎯' },
   { id: 'NEIGHBORHOOD_CONSISTENCY', label: 'Neighborhood Signal', icon: '🌐' },
   { id: 'PREDICTION_STABILITY', label: 'Stability Signal', icon: '🛡️' },
   { id: 'DENSITY_ANALYSIS', label: 'Density Signal', icon: '📊' },
-  { id: 'CALIBRATION', label: 'Threshold Calibration', icon: '⚙️' },
-  { id: 'TRUST_SCORING', label: 'Trust Aggregation', icon: '💎' },
+  { id: 'VALIDATION_SCORING', label: 'Validation Scoring', icon: '⚖️' },
+  { id: 'WEIGHT_CALIBRATION', label: 'Weight Calibration', icon: '🎚️' },
+  { id: 'THRESHOLD_CALIBRATION', label: 'Threshold Calibration', icon: '⚙️' },
+  { id: 'TEST_SCORING', label: 'TrustScore Fusion', icon: '💎' },
   { id: 'ISOLATION', label: 'Purification Isolation', icon: '🧹' },
   { id: 'RETRAINING', label: 'Downstream Retraining', icon: '🔄' },
   { id: 'EVALUATION', label: 'Test Evaluation', icon: '📈' },
+  { id: 'BASELINES', label: 'Baseline Benchmark', icon: '🔬' },
 ];
 
 export const LiveInvestigationView: React.FC = () => {
@@ -514,6 +520,36 @@ export const LiveInvestigationView: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Research Protocol & Leakage Controls */}
+      <div className="bg-card/60 border border-border/80 rounded-xl p-4 text-xs space-y-2">
+        <div className="flex items-center justify-between text-text-secondary font-medium">
+          <span className="flex items-center gap-1.5 text-white font-semibold uppercase tracking-wider">
+            <span>🛡️</span> Research Protocol & Leakage Controls
+          </span>
+          <span className="text-emerald-400 font-mono">Zero-Leakage Invariant Enforced</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+          <div className="p-2.5 rounded-lg bg-background/60 border border-border/50">
+            <div className="font-semibold text-primary-light">TRAIN Split</div>
+            <div className="text-text-secondary text-[11px] mt-0.5">
+              Used strictly for detector manifold fitting and downstream baseline retraining.
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg bg-background/60 border border-border/50">
+            <div className="font-semibold text-primary-light">VALIDATION Split</div>
+            <div className="text-text-secondary text-[11px] mt-0.5">
+              Used strictly for signal weight optimization and decision threshold calibration.
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg bg-background/60 border border-border/50">
+            <div className="font-semibold text-primary-light">TEST Split (Held-Out)</div>
+            <div className="text-text-secondary text-[11px] mt-0.5">
+              Used strictly for final evaluation. TEST ground truth is never used for fitting or calibration.
+            </div>
+          </div>
         </div>
       </div>
 

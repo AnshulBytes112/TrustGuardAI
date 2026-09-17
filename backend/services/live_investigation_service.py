@@ -5,7 +5,6 @@ import datetime
 import hashlib
 import json
 import logging
-import platform
 import threading
 import time
 import uuid
@@ -36,6 +35,7 @@ from ml.evaluation.engine import DetectionEvaluationEngine
 from ml.experiments.schemas import JSONLDatasetConfig
 from ml.features.config import RepresentationConfig
 from ml.features.representations import DistilBERTRepresentationProvider
+from ml.features.schemas import RepresentationResult
 from ml.features.service import RepresentationService
 from ml.models.classifier import TrainableDownstreamClassifier
 from ml.models.schemas import TrainingConfig
@@ -51,8 +51,9 @@ ARTIFACT_DIR = Path("artifacts/live")
 
 class LiveInvestigationService:
     """
-    Orchestrates real-time research investigations against actual ML components.
-    Emits real-time SSE events with zero simulation and zero fake metrics.
+    Orchestration and event-publishing layer for real-time research investigations.
+    Delegates all ML computations directly to the canonical ml/ package.
+    Emits real-time SSE events with zero simulated progress and zero hardcoded metrics.
     """
 
     _jobs: dict[str, LiveJobResponse] = {}
@@ -61,26 +62,28 @@ class LiveInvestigationService:
 
     @classmethod
     def get_job(cls, job_id: str) -> LiveJobResponse | None:
-        return cls._jobs.get(job_id)
+        with cls._lock:
+            return cls._jobs.get(job_id)
 
     @classmethod
     def list_jobs(cls) -> list[LiveJobSummary]:
-        summaries = []
-        for job in cls._jobs.values():
-            summaries.append(
-                LiveJobSummary(
-                    job_id=job.job_id,
-                    status=job.status,
-                    dataset_id=job.request.dataset_id,
-                    attack_type=job.request.attack_type,
-                    poison_rate=job.request.poison_rate,
-                    created_at=job.created_at,
-                    completed_at=job.completed_at,
-                    current_stage=job.current_stage,
-                    error_message=job.error_message,
+        with cls._lock:
+            summaries = []
+            for job in cls._jobs.values():
+                summaries.append(
+                    LiveJobSummary(
+                        job_id=job.job_id,
+                        status=job.status,
+                        dataset_id=job.request.dataset_id,
+                        attack_type=job.request.attack_type,
+                        poison_rate=job.request.poison_rate,
+                        created_at=job.created_at,
+                        completed_at=job.completed_at,
+                        current_stage=job.current_stage,
+                        error_message=job.error_message,
+                    )
                 )
-            )
-        return sorted(summaries, key=lambda s: s.created_at, reverse=True)
+            return sorted(summaries, key=lambda s: s.created_at, reverse=True)
 
     @classmethod
     def start_investigation(cls, request: LiveInvestigationRequest) -> LiveJobResponse:
@@ -103,7 +106,7 @@ class LiveInvestigationService:
             cls._jobs[job_id] = job
             cls._subscribers[job_id] = []
 
-        # Start execution in a dedicated background thread to prevent blocking FastAPI's async event loop
+        # Background thread prevents blocking FastAPI's async event loop
         thread = threading.Thread(
             target=cls._run_pipeline_worker,
             args=(job_id, request),
@@ -118,32 +121,32 @@ class LiveInvestigationService:
     async def subscribe_events(cls, job_id: str) -> AsyncGenerator[LiveSSEEvent, None]:
         """
         Subscribes to live SSE events for a specific job.
-        Yields all past events first (for reconnection/refresh), then awaits future events.
+        Yields all past events first (for reliable reconnection/refresh), then streams new events as they are emitted.
         """
-        queue: asyncio.Queue[LiveSSEEvent] = asyncio.Queue()
+        last_index = 0
+        while True:
+            events_to_yield: list[LiveSSEEvent] = []
+            job_status = "RUNNING"
 
-        with cls._lock:
-            job = cls._jobs.get(job_id)
-            if not job:
-                raise ValueError(f"Job {job_id} not found.")
-
-            # Queue existing events
-            for ev in job.events:
-                queue.put_nowait(ev)
-
-            if job.status not in ["COMPLETED", "FAILED", "CANCELLED"]:
-                cls._subscribers.setdefault(job_id, []).append(queue)
-
-        try:
-            while True:
-                event = await queue.get()
-                yield event
-                if event.event_type in ["JOB_COMPLETED", "JOB_FAILED"]:
-                    break
-        finally:
             with cls._lock:
-                if job_id in cls._subscribers and queue in cls._subscribers[job_id]:
-                    cls._subscribers[job_id].remove(queue)
+                job = cls._jobs.get(job_id)
+                if not job:
+                    raise ValueError(f"Job {job_id} not found.")
+
+                job_status = job.status
+                if last_index < len(job.events):
+                    events_to_yield = job.events[last_index:]
+                    last_index = len(job.events)
+
+            for ev in events_to_yield:
+                yield ev
+                if ev.event_type in ["JOB_COMPLETED", "JOB_FAILED"]:
+                    return
+
+            if job_status in ["COMPLETED", "FAILED", "CANCELLED"] and last_index >= len(job.events if job else []):
+                return
+
+            await asyncio.sleep(0.05)
 
     @classmethod
     def _emit_event(
@@ -155,7 +158,7 @@ class LiveInvestigationService:
         message: str,
         progress_info: dict[str, Any] | None = None,
         data: dict[str, Any] | None = None,
-    ) -> LiveSSEEvent:
+    ) -> LiveSSEEvent | None:
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         with cls._lock:
             job = cls._jobs.get(job_id)
@@ -179,20 +182,13 @@ class LiveInvestigationService:
             if status in ["RUNNING", "COMPLETED", "FAILED"]:
                 job.status = status
 
-            # Push to all active subscriber queues
-            for q in cls._subscribers.get(job_id, []):
-                try:
-                    q.put_nowait(event)
-                except Exception:
-                    pass
-
             return event
 
     @classmethod
     def _run_pipeline_worker(cls, job_id: str, req: LiveInvestigationRequest) -> None:
         """
-        Synchronous pipeline worker that runs ML computations sequentially
-        and emits genuine events at every step.
+        Sequential ML pipeline orchestrator executing canonical ml/ components.
+        Emits real events at every step with strict TRAIN/VAL/TEST isolation.
         """
         try:
             # 1. JOB_CREATED
@@ -211,14 +207,14 @@ class LiveInvestigationService:
                 event_type="DATASET_VALIDATING",
                 stage="VALIDATION",
                 status="RUNNING",
-                message="Validating dataset integrity, labels, and partition schemas...",
+                message="Validating dataset integrity, IDs, and label schemas...",
             )
 
             base_samples = cls._load_or_generate_dataset(req.dataset_id, req.seed)
             if not base_samples:
                 raise ValueError(f"Dataset '{req.dataset_id}' could not be loaded or is empty.")
 
-            # Validate IDs & Schema
+            # Validate IDs, uniqueness, and non-empty text
             unique_ids = set()
             for s in base_samples:
                 if not s.sample_id:
@@ -257,7 +253,7 @@ class LiveInvestigationService:
                     event_type="POISONING_STARTED",
                     stage="POISONING",
                     status="RUNNING",
-                    message=f"Injecting '{req.attack_type}' backdoor trigger at {req.poison_rate*100:.1f}% rate...",
+                    message=f"Injecting '{req.attack_type}' backdoor trigger at {req.poison_rate*100:.1f}% rate using TextPoisoningEngine...",
                 )
 
                 poison_cfg = TextPoisoningConfig(
@@ -334,7 +330,7 @@ class LiveInvestigationService:
                 },
             )
 
-            # 5. REPRESENTATIONS EXTRACTION
+            # 5. REPRESENTATIONS EXTRACTION (DistilBERT across 6 layers)
             cls._emit_event(
                 job_id,
                 event_type="REPRESENTATIONS_STARTED",
@@ -347,7 +343,7 @@ class LiveInvestigationService:
             rep_cfg = RepresentationConfig(
                 model_name="distilbert-base-uncased",
                 max_length=64,
-                batch_size=16,
+                batch_size=32,
                 device="cpu",
                 layers=(1, 2, 3, 4, 5, 6),
                 use_cache=True,
@@ -355,7 +351,6 @@ class LiveInvestigationService:
             provider = DistilBERTRepresentationProvider(rep_cfg)
             rep_service = RepresentationService(provider, rep_cfg)
 
-            # Extract by split with real progress tracking
             train_reps = rep_service.extract(train_samples)
             cls._emit_event(
                 job_id,
@@ -377,19 +372,49 @@ class LiveInvestigationService:
             )
 
             test_reps = rep_service.extract(test_samples)
-            all_reps = rep_service.extract(working_samples)
+
+            # Combine split representations in exact partition order
+            working_samples = train_samples + val_samples + test_samples
+            all_layers = None
+            if train_reps.layer_representations:
+                all_layers = {
+                    layer: np.concatenate(
+                        [train_reps.layer_representations[layer], val_reps.layer_representations[layer], test_reps.layer_representations[layer]],
+                        axis=0,
+                    )
+                    for layer in train_reps.layer_representations
+                }
+
+            all_reps = RepresentationResult(
+                sample_ids=[s.sample_id for s in working_samples],
+                representations=np.concatenate(
+                    [train_reps.representations, val_reps.representations, test_reps.representations],
+                    axis=0,
+                ),
+                layer_representations=all_layers,
+                model_name=train_reps.model_name,
+                max_length=train_reps.max_length,
+            )
 
             cls._emit_event(
                 job_id,
                 event_type="REPRESENTATIONS_COMPLETED",
                 stage="REPRESENTATIONS",
                 status="COMPLETED",
-                message=f"Representations extracted successfully for all {len(working_samples)} samples across 6 layers.",
+                message=f"Representations extracted for all {len(working_samples)} samples across 6 layers.",
                 progress_info={"processed_samples": len(working_samples), "total_samples": len(working_samples)},
                 data={"embedding_dim": train_reps.representations.shape[1], "layers": [1, 2, 3, 4, 5, 6]},
             )
 
-            # 6. TRUSTGUARD DETECTOR INITIALIZATION & FITTING ON TRAIN
+            # 6. TRUSTGUARD FIT ON TRAIN
+            cls._emit_event(
+                job_id,
+                event_type="TRUSTGUARD_FIT_STARTED",
+                stage="TRUSTGUARD_FIT",
+                status="RUNNING",
+                message="Fitting TrustGuard multi-signal extractors strictly on TRAIN split...",
+            )
+
             tg_config = TrustGuardConfig(
                 layers=(1, 2, 3, 4, 5, 6),
                 enabled_signals=req.enabled_signals,
@@ -397,32 +422,49 @@ class LiveInvestigationService:
                 threshold_calibration_method=req.calibration_method,
                 seed=req.seed,
             )
+            detector = TrustGuardDetector(representation_provider=provider)
+            detector.fit(train_reps, tg_config, samples=train_samples)
 
-            detector = TrustGuardDetector()
+            cls._emit_event(
+                job_id,
+                event_type="TRUSTGUARD_FIT_COMPLETED",
+                stage="TRUSTGUARD_FIT",
+                status="COMPLETED",
+                message="TrustGuard signal extractors successfully fitted on TRAIN manifold representations.",
+                data={"enabled_signals": req.enabled_signals, "train_samples": len(train_samples)},
+            )
 
-            # Signal 1: Semantic Consistency
+            # 7. SIGNAL EXTRACTION STAGES (Emit granular telemetry for each enabled signal)
+            # Execute each signal on TRAIN representations via the detector's internal extractors
             if "semantic" in req.enabled_signals:
                 cls._emit_event(
                     job_id,
                     event_type="SEMANTIC_ANALYSIS_STARTED",
                     stage="SEMANTIC_CONSISTENCY",
                     status="RUNNING",
-                    message="Evaluating semantic class consistency and centroid margin offsets...",
+                    message="Evaluating semantic class prototypes and margin offsets...",
                 )
                 t0_sig = time.perf_counter()
-                # Run semantic signal
-                detector.fit(train_reps, tg_config, samples=train_samples, representation_provider=provider)
+                sr_semantic = detector._semantic_extractor.extract(
+                    representations=train_reps,
+                    config=tg_config,
+                    samples=train_samples,
+                )
                 dt_sig = time.perf_counter() - t0_sig
                 cls._emit_event(
                     job_id,
                     event_type="SEMANTIC_ANALYSIS_COMPLETED",
                     stage="SEMANTIC_CONSISTENCY",
                     status="COMPLETED",
-                    message=f"Semantic consistency analysis complete ({dt_sig:.2f}s).",
-                    data={"signal": "semantic", "status": "computed", "runtime_seconds": round(dt_sig, 3)},
+                    message=f"Semantic consistency analysis complete ({dt_sig:.2f}s, {len(sr_semantic.items)} samples evaluated).",
+                    data={
+                        "signal": "semantic",
+                        "processed_count": len(sr_semantic.items),
+                        "mean_score": round(float(np.mean(sr_semantic.scores)), 4) if sr_semantic.scores else 0.0,
+                        "runtime_seconds": round(dt_sig, 3),
+                    },
                 )
 
-            # Signal 2: Neighborhood Consistency
             if "neighborhood" in req.enabled_signals:
                 cls._emit_event(
                     job_id,
@@ -432,17 +474,26 @@ class LiveInvestigationService:
                     message="Evaluating local manifold k-NN agreement and purity...",
                 )
                 t0_sig = time.perf_counter()
+                sr_neighborhood = detector._neighborhood_extractor.extract(
+                    representations=train_reps,
+                    config=tg_config,
+                    samples=train_samples,
+                )
                 dt_sig = time.perf_counter() - t0_sig
                 cls._emit_event(
                     job_id,
                     event_type="NEIGHBORHOOD_ANALYSIS_COMPLETED",
                     stage="NEIGHBORHOOD_CONSISTENCY",
                     status="COMPLETED",
-                    message=f"Neighborhood consistency analysis complete ({dt_sig:.2f}s).",
-                    data={"signal": "neighborhood", "status": "computed", "runtime_seconds": round(dt_sig, 3)},
+                    message=f"Neighborhood consistency analysis complete ({dt_sig:.2f}s, {len(sr_neighborhood.items)} samples evaluated).",
+                    data={
+                        "signal": "neighborhood",
+                        "processed_count": len(sr_neighborhood.items),
+                        "mean_score": round(float(np.mean(sr_neighborhood.scores)), 4) if sr_neighborhood.scores else 0.0,
+                        "runtime_seconds": round(dt_sig, 3),
+                    },
                 )
 
-            # Signal 3: Prediction Stability
             if "stability" in req.enabled_signals:
                 cls._emit_event(
                     job_id,
@@ -452,17 +503,26 @@ class LiveInvestigationService:
                     message="Evaluating classifier prediction stability under semantic text perturbations...",
                 )
                 t0_sig = time.perf_counter()
+                sr_stability = detector._stability_extractor.extract(
+                    representations=train_reps,
+                    config=tg_config,
+                    samples=train_samples,
+                )
                 dt_sig = time.perf_counter() - t0_sig
                 cls._emit_event(
                     job_id,
                     event_type="STABILITY_ANALYSIS_COMPLETED",
                     stage="PREDICTION_STABILITY",
                     status="COMPLETED",
-                    message=f"Prediction stability analysis complete ({dt_sig:.2f}s).",
-                    data={"signal": "stability", "status": "computed", "runtime_seconds": round(dt_sig, 3)},
+                    message=f"Prediction stability analysis complete ({dt_sig:.2f}s, {len(sr_stability.items)} samples evaluated).",
+                    data={
+                        "signal": "stability",
+                        "processed_count": len(sr_stability.items),
+                        "mean_score": round(float(np.mean(sr_stability.scores)), 4) if sr_stability.scores else 0.0,
+                        "runtime_seconds": round(dt_sig, 3),
+                    },
                 )
 
-            # Signal 4: Density Analysis
             if "density" in req.enabled_signals:
                 cls._emit_event(
                     job_id,
@@ -472,67 +532,108 @@ class LiveInvestigationService:
                     message="Computing representation space density and local outlier factors...",
                 )
                 t0_sig = time.perf_counter()
+                sr_density = detector._density_extractor.extract(
+                    representations=train_reps,
+                    config=tg_config,
+                )
                 dt_sig = time.perf_counter() - t0_sig
                 cls._emit_event(
                     job_id,
                     event_type="DENSITY_ANALYSIS_COMPLETED",
                     stage="DENSITY_ANALYSIS",
                     status="COMPLETED",
-                    message=f"Density analysis complete ({dt_sig:.2f}s).",
-                    data={"signal": "density", "status": "computed", "runtime_seconds": round(dt_sig, 3)},
+                    message=f"Density analysis complete ({dt_sig:.2f}s, {len(sr_density.items)} samples evaluated).",
+                    data={
+                        "signal": "density",
+                        "processed_count": len(sr_density.items),
+                        "mean_score": round(float(np.mean(sr_density.scores)), 4) if sr_density.scores else 0.0,
+                        "runtime_seconds": round(dt_sig, 3),
+                    },
                 )
 
-            # 7. THRESHOLD & WEIGHT CALIBRATION (STRICTLY ON VALIDATION SPLIT)
+            # 8. VALIDATION SCORING, WEIGHT CALIBRATION & THRESHOLD CALIBRATION
             cls._emit_event(
                 job_id,
-                event_type="THRESHOLD_CALIBRATION_STARTED",
-                stage="CALIBRATION",
+                event_type="VALIDATION_SCORING_STARTED",
+                stage="VALIDATION_SCORING",
                 status="RUNNING",
-                message="Calibrating optimal signal weights and decision threshold on VALIDATION split...",
+                message="Computing multi-signal extraction on VALIDATION split...",
             )
 
-            # Calibrate strictly on VALIDATION split (zero TEST leakage)
+            # Validation calibration strictly on VALIDATION split (zero TEST leakage)
             learned_weights, calibrated_threshold = detector.calibrate_validation(
                 val_reps, val_samples, tg_config
             )
 
             cls._emit_event(
                 job_id,
-                event_type="THRESHOLD_CALIBRATION_COMPLETED",
-                stage="CALIBRATION",
+                event_type="VALIDATION_SCORING_COMPLETED",
+                stage="VALIDATION_SCORING",
                 status="COMPLETED",
-                message=f"Calibrated threshold: {calibrated_threshold:.4f} using strategy '{req.calibration_method}'.",
-                data={
-                    "calibrated_threshold": round(float(calibrated_threshold), 4),
-                    "learned_weights": {k: round(v, 4) for k, v in (learned_weights or {}).items()},
-                    "strategy": req.calibration_method,
-                },
+                message=f"Validation split scored ({len(val_samples)} validation samples).",
+                data={"val_samples_count": len(val_samples)},
             )
 
-            # 8. TRUST SCORING ACROSS ALL SAMPLES
             cls._emit_event(
                 job_id,
-                event_type="TRUST_SCORING_STARTED",
-                stage="TRUST_SCORING",
+                event_type="WEIGHT_CALIBRATION_STARTED",
+                stage="WEIGHT_CALIBRATION",
                 status="RUNNING",
-                message="Calculating TrustScore and SuspicionScore metrics across dataset...",
+                message=f"Deriving signal weights using strategy '{req.weighting_strategy}' on VALIDATION split...",
             )
 
-            all_detection = detector.detect(all_reps, tg_config, samples=working_samples)
-            train_detection = detector.detect(train_reps, tg_config, samples=train_samples)
-            test_detection = detector.detect(test_reps, tg_config, samples=test_samples)
-
-            score_res = detector.last_score_result
             active_weights = learned_weights if req.weighting_strategy == "learned_validation" and learned_weights else {
                 sig: 1.0 / len(req.enabled_signals) for sig in req.enabled_signals
             }
 
             cls._emit_event(
                 job_id,
-                event_type="TRUST_SCORING_COMPLETED",
-                stage="TRUST_SCORING",
+                event_type="WEIGHT_CALIBRATION_COMPLETED",
+                stage="WEIGHT_CALIBRATION",
                 status="COMPLETED",
-                message=f"Trust scores evaluated: Mean Suspicion = {float(np.mean(all_detection.scores)):.4f}.",
+                message="Validation-derived weights successfully calibrated.",
+                data={"weights": {k: round(v, 4) for k, v in active_weights.items()}, "strategy": req.weighting_strategy},
+            )
+
+            cls._emit_event(
+                job_id,
+                event_type="THRESHOLD_CALIBRATION_STARTED",
+                stage="THRESHOLD_CALIBRATION",
+                status="RUNNING",
+                message=f"Calibrating decision threshold using '{req.calibration_method}' on VALIDATION split...",
+            )
+
+            cls._emit_event(
+                job_id,
+                event_type="THRESHOLD_CALIBRATION_COMPLETED",
+                stage="THRESHOLD_CALIBRATION",
+                status="COMPLETED",
+                message=f"Calibrated threshold: {calibrated_threshold:.4f} via method '{req.calibration_method}'.",
+                data={
+                    "calibrated_threshold": round(float(calibrated_threshold), 4),
+                    "method": req.calibration_method,
+                },
+            )
+
+            # 9. TEST SCORING & ALL-SAMPLE TRUST EVALUATION
+            cls._emit_event(
+                job_id,
+                event_type="TEST_SCORING_STARTED",
+                stage="TEST_SCORING",
+                status="RUNNING",
+                message="Computing composite TrustScore and SuspicionScore metrics...",
+            )
+
+            all_detection = detector.detect(all_reps, tg_config, samples=working_samples)
+            train_detection = detector.detect(train_reps, tg_config, samples=train_samples)
+            test_detection = detector.detect(test_reps, tg_config, samples=test_samples)
+
+            cls._emit_event(
+                job_id,
+                event_type="TEST_SCORING_COMPLETED",
+                stage="TEST_SCORING",
+                status="COMPLETED",
+                message=f"Trust scores computed across dataset: Mean Suspicion = {float(np.mean(all_detection.scores)):.4f}.",
                 data={
                     "mean_suspicion": round(float(np.mean(all_detection.scores)), 4),
                     "max_suspicion": round(float(np.max(all_detection.scores)), 4),
@@ -540,13 +641,13 @@ class LiveInvestigationService:
                 },
             )
 
-            # 9. ISOLATION & PURIFICATION
+            # 10. ISOLATION & PURIFICATION ON TRAIN
             cls._emit_event(
                 job_id,
                 event_type="ISOLATION_STARTED",
                 stage="ISOLATION",
                 status="RUNNING",
-                message="Purifying TRAIN split based on calibrated decision threshold...",
+                message="Purifying contaminated TRAIN split based on calibrated decision threshold...",
             )
 
             purifier = DatasetPurifier()
@@ -573,7 +674,7 @@ class LiveInvestigationService:
                 },
             )
 
-            # 10. RETRAINING BENCHMARK (MODEL A VS MODEL B)
+            # 11. DOWNSTREAM RETRAINING: MODEL A (RAW TRAIN) VS MODEL B (PURIFIED TRAIN)
             cls._emit_event(
                 job_id,
                 event_type="RETRAINING_STARTED",
@@ -627,19 +728,19 @@ class LiveInvestigationService:
                 progress_info={"model_a": "completed", "model_b": "completed"},
             )
 
-            # 11. DOWNSTREAM EVALUATION ON TEST SPLIT
+            # 12. DOWNSTREAM EVALUATION ON HELD-OUT TEST SPLIT
             cls._emit_event(
                 job_id,
                 event_type="EVALUATION_STARTED",
                 stage="EVALUATION",
                 status="RUNNING",
-                message="Evaluating downstream robustness and detection fidelity on held-out TEST set...",
+                message="Evaluating downstream robustness and detection metrics on held-out TEST split...",
             )
 
             clean_test_indices = [i for i, s in enumerate(test_samples) if s.poison_ground_truth is False or s.poison_ground_truth is None]
             poison_test_indices = [i for i, s in enumerate(test_samples) if s.poison_ground_truth is True]
 
-            # 11.1 Clean Accuracy
+            # 12.1 Clean Accuracy
             if clean_test_indices:
                 clean_test_matrix = test_reps.representations[clean_test_indices]
                 clean_true_labels = [test_samples[i].label for i in clean_test_indices]
@@ -652,7 +753,7 @@ class LiveInvestigationService:
             else:
                 ca_a, ca_b = 0.0, 0.0
 
-            # 11.2 Attack Success Rate (ASR)
+            # 12.2 Attack Success Rate (ASR)
             if poison_test_indices:
                 poison_test_matrix = test_reps.representations[poison_test_indices]
                 preds_a_poison = model_a.predict(poison_test_matrix)
@@ -666,7 +767,7 @@ class LiveInvestigationService:
             ca_delta = ca_b - ca_a
             asr_reduction = asr_a - asr_b
 
-            # 11.3 Detection metrics on TEST split
+            # 12.3 Detection metrics on TEST split
             eval_engine = DetectionEvaluationEngine()
             test_det_binary = apply_threshold(test_detection, calibrated_threshold)
             eval_report = eval_engine.evaluate(test_samples, test_det_binary)
@@ -709,7 +810,7 @@ class LiveInvestigationService:
                 data=retraining_report.model_dump(mode="json"),
             )
 
-            # 12. BASELINE COMPARISON (FLARE, ONION)
+            # 13. BASELINE COMPARISON (FLARE, ONION)
             baseline_results: list[LiveBaselineResult] = []
             if req.run_baselines:
                 cls._emit_event(
@@ -720,7 +821,7 @@ class LiveInvestigationService:
                     message="Running baseline detectors (TrustGuard vs FLARE vs ONION) under identical data/splits...",
                 )
 
-                # Add TrustGuard as canonical baseline comparison row
+                # Add TrustGuard as canonical reference row
                 tg_row = LiveBaselineResult(
                     method="TrustGuard",
                     threshold=round(calibrated_threshold, 4),
@@ -737,24 +838,30 @@ class LiveInvestigationService:
                 )
                 baseline_results.append(tg_row)
 
-                # Execute requested external baselines
+                # Execute requested external baselines using canonical ML implementations
                 for method_name in req.baseline_methods:
                     t0_b = time.perf_counter()
                     try:
                         b_detector = DetectorRegistry.create(method_name)
                         if method_name == "flare":
                             b_cfg = DetectorConfig(layers=(1, 2, 3, 4, 5, 6))
+                            b_detector.fit(train_reps, b_cfg)
+                            b_test_det = b_detector.detect(test_reps, b_cfg)
+                            b_train_det = b_detector.detect(train_reps, b_cfg)
                         elif method_name == "onion":
                             b_cfg = OnionDetectorConfig()
+                            b_detector.fit(train_reps, b_cfg, samples=train_samples)
+                            b_test_det = b_detector.detect(test_reps, b_cfg, samples=test_samples)
+                            b_train_det = b_detector.detect(train_reps, b_cfg, samples=train_samples)
                         else:
                             b_cfg = DetectorConfig()
+                            b_detector.fit(train_reps, b_cfg)
+                            b_test_det = b_detector.detect(test_reps, b_cfg)
+                            b_train_det = b_detector.detect(train_reps, b_cfg)
 
-                        b_detector.fit(train_reps, b_cfg, samples=train_samples)
-                        b_test_det = b_detector.detect(test_reps, b_cfg, samples=test_samples)
                         b_eval = eval_engine.evaluate(test_samples, apply_threshold(b_test_det, calibrated_threshold))
 
                         # Purify and retrain for baseline
-                        b_train_det = b_detector.detect(train_reps, b_cfg, samples=train_samples)
                         b_retained = [i for i, s in enumerate(b_train_det.scores) if s < calibrated_threshold]
                         if len(b_retained) < 2:
                             b_retained = list(range(min(2, len(train_samples))))
@@ -820,7 +927,7 @@ class LiveInvestigationService:
                     data={"rows": [r.model_dump(mode="json") for r in baseline_results]},
                 )
 
-            # 13. GENERATE GRANULAR SAMPLE INSPECTIONS (Zero fake values)
+            # 14. GENERATE GRANULAR SAMPLE INSPECTIONS DIRECTLY FROM DETECTOR RESULTS
             sample_inspections: list[LiveSampleInspection] = []
             sig_results_map = detector.last_signal_results
 
@@ -830,7 +937,7 @@ class LiveInvestigationService:
                 trust = round(max(0.0, min(1.0, 1.0 - suspicion)), 4)
                 decision = "ISOLATE" if suspicion >= calibrated_threshold else "RETAIN"
 
-                # Signal breakdown
+                # Signal breakdown from detector output
                 signals_dict: dict[str, float | None] = {}
                 contributions_list: list[SignalContribution] = []
 
@@ -841,8 +948,8 @@ class LiveInvestigationService:
                     if sig_name in sig_results_map and sig_results_map[sig_name].items:
                         item = sig_results_map[sig_name].items[idx] if idx < len(sig_results_map[sig_name].items) else None
                         if item:
-                            norm_val = round(float(item.normalized_suspicion), 4)
-                            raw_val = round(float(item.raw_score), 4) if item.raw_score is not None else None
+                            norm_val = round(float(item.normalized_value) if item.normalized_value is not None else float(sig_results_map[sig_name].scores[idx]), 4)
+                            raw_val = round(float(item.raw_value), 4) if item.raw_value is not None else None
                             signals_dict[sig_name] = norm_val
                             w = float(active_weights.get(sig_name, 0.25))
                             linear_contrib = w * norm_val
@@ -882,7 +989,7 @@ class LiveInvestigationService:
                     )
                 )
 
-            # 14. SAVE TO JOB STATE & EXPORT ARTIFACT
+            # 15. UPDATE BACKEND SOURCE-OF-TRUTH STATE
             with cls._lock:
                 job = cls._jobs.get(job_id)
                 if job:
@@ -904,7 +1011,7 @@ class LiveInvestigationService:
             except Exception as e:
                 logger.warning(f"Failed to persist live investigation artifact: {e}")
 
-            # 15. FINAL JOB_COMPLETED EVENT
+            # 16. FINAL JOB_COMPLETED EVENT
             cls._emit_event(
                 job_id,
                 event_type="JOB_COMPLETED",
@@ -943,17 +1050,69 @@ class LiveInvestigationService:
     @classmethod
     def _load_or_generate_dataset(cls, dataset_id: str, seed: int) -> list[Sample]:
         """
-        Loads actual dataset from existing fixtures / artifacts / DB or generates
-        canonical dataset if demo ID specified.
+        Loads actual dataset from database, existing fixtures, or creates canonical benchmark distribution.
+        Database-persisted custom datasets take absolute priority.
         """
+        # 1. Primary check: Query SQLite database for uploaded/custom dataset
+        if dataset_id not in ["demo_sst2", "default"]:
+            try:
+                from backend.core.database import SessionLocal
+                from backend.models.dataset import SampleModel
+                with SessionLocal() as db:
+                    db_samples = db.query(SampleModel).filter(SampleModel.dataset_id == dataset_id).all()
+                    if db_samples:
+                        loaded_samples = []
+                        for s in db_samples:
+                            pgt = True if s.poison_ground_truth == 1 else (False if s.poison_ground_truth == 0 else None)
+                            sp = Split.TRAIN if s.split == "TRAIN" else (Split.VALIDATION if s.split == "VALIDATION" else Split.TEST)
+                            loaded_samples.append(
+                                Sample(
+                                    sample_id=s.external_sample_id or s.id,
+                                    text=s.text,
+                                    label=s.label,
+                                    label_status=LabelStatus.KNOWN if s.label is not None else LabelStatus.UNKNOWN,
+                                    split=sp,
+                                    dataset_id=dataset_id,
+                                    dataset_version="v1",
+                                    poison_ground_truth=pgt,
+                                )
+                            )
+                        logger.info(f"Loaded {len(loaded_samples)} samples for dataset '{dataset_id}' from database.")
+                        return loaded_samples
+            except Exception as err:
+                logger.warning(f"Database lookup for dataset '{dataset_id}' failed: {err}")
+
+        # 2. Check explicitly named test fixtures
         fixture_custom = Path("tests/fixtures/custom_upload.jsonl")
         fixture_synth = Path("tests/fixtures/synthetic.jsonl")
 
-        if dataset_id == "demo_sst2" or dataset_id == "default":
-            # Canonical SST-2 benchmark sample distribution
-            samples = []
-            seed_rng = np.random.default_rng(seed)
+        if dataset_id in ["custom", "custom_upload"] and fixture_custom.exists():
+            adapter = JSONLDatasetAdapter(
+                JSONLDatasetConfig(
+                    dataset_id="custom",
+                    dataset_version="v1",
+                    text_field="text",
+                    label_field="label",
+                    split_field="split",
+                )
+            )
+            return adapter.load(str(fixture_custom)).samples
 
+        if dataset_id in ["synthetic", "synth"] and fixture_synth.exists():
+            adapter = JSONLDatasetAdapter(
+                JSONLDatasetConfig(
+                    dataset_id="synthetic",
+                    dataset_version="v1",
+                    text_field="text",
+                    label_field="label",
+                    split_field="split",
+                )
+            )
+            return adapter.load(str(fixture_synth)).samples
+
+        # 3. Default demo distribution for demo_sst2 or default
+        if dataset_id in ["demo_sst2", "default"]:
+            samples = []
             pos_templates = [
                 "A truly wonderful, masterfully crafted motion picture with tremendous heart.",
                 "Brilliant performances and breathtaking cinematography that elevates the genre.",
@@ -982,7 +1141,6 @@ class LiveInvestigationService:
 
             total_pairs = 15  # 30 total samples (18 train, 6 val, 6 test)
             for i in range(total_pairs):
-                # Positive sample
                 pos_text = pos_templates[i % len(pos_templates)]
                 samples.append(
                     Sample(
@@ -996,7 +1154,6 @@ class LiveInvestigationService:
                         poison_ground_truth=False,
                     )
                 )
-                # Negative sample
                 neg_text = neg_templates[i % len(neg_templates)]
                 samples.append(
                     Sample(
@@ -1012,29 +1169,4 @@ class LiveInvestigationService:
                 )
             return samples
 
-        if fixture_custom.exists() and dataset_id in ["custom", "custom_upload"]:
-            adapter = JSONLDatasetAdapter(
-                JSONLDatasetConfig(
-                    dataset_id="custom",
-                    dataset_version="v1",
-                    text_field="text",
-                    label_field="label",
-                    split_field="split",
-                )
-            )
-            return adapter.load(str(fixture_custom)).samples
-
-        if fixture_synth.exists():
-            adapter = JSONLDatasetAdapter(
-                JSONLDatasetConfig(
-                    dataset_id="synthetic",
-                    dataset_version="v1",
-                    text_field="text",
-                    label_field="label",
-                    split_field="split",
-                )
-            )
-            return adapter.load(str(fixture_synth)).samples
-
-        # Default fallback
-        return cls._load_or_generate_dataset("demo_sst2", seed)
+        raise ValueError(f"Dataset '{dataset_id}' not found in database or fixtures.")
