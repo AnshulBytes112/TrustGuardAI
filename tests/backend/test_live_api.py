@@ -173,10 +173,15 @@ def test_live_sse_streaming_endpoint(client):
     res = client.post("/api/live/investigate", json=payload)
     job_id = res.json()["job_id"]
 
-    # Test SSE stream connection
-    stream_res = client.get(f"/api/live/stream/{job_id}")
-    assert stream_res.status_code == 200
-    assert "text/event-stream" in stream_res.headers["content-type"]
+    # Test SSE stream connection non-blockingly
+    with client.stream("GET", f"/api/live/stream/{job_id}") as stream_res:
+        assert stream_res.status_code == 200
+        assert "text/event-stream" in stream_res.headers["content-type"]
+        # Read the first incoming line
+        for line in stream_res.iter_lines():
+            if line:
+                assert line.startswith("id:") or line.startswith("event:") or line.startswith("data:")
+                break
 
 
 def test_live_job_not_found_404(client):

@@ -269,7 +269,7 @@ class LiveInvestigationService:
                 poisoning_engine = TextPoisoningEngine()
                 poison_res = poisoning_engine.poison(base_samples, poison_cfg)
                 working_samples = poison_res.samples
-                injected_count = poison_res.metadata.poisoned_samples_count
+                injected_count = poison_res.metadata.poisoned_samples
 
                 cls._emit_event(
                     job_id,
@@ -386,7 +386,7 @@ class LiveInvestigationService:
                 status="COMPLETED",
                 message=f"Representations extracted successfully for all {len(working_samples)} samples across 6 layers.",
                 progress_info={"processed_samples": len(working_samples), "total_samples": len(working_samples)},
-                data={"embedding_dim": train_reps.dimension, "layers": [1, 2, 3, 4, 5, 6]},
+                data={"embedding_dim": train_reps.representations.shape[1], "layers": [1, 2, 3, 4, 5, 6]},
             )
 
             # 6. TRUSTGUARD DETECTOR INITIALIZATION & FITTING ON TRAIN
