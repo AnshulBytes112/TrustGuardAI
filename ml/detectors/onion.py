@@ -69,9 +69,10 @@ class OnionDetector(BaseDetector):
 
             self._model = AutoModelForCausalLM.from_pretrained(self.config.language_model_name)
             self._model.eval()
-            if self.config.device != "cpu" and torch.cuda.is_available():
-                self._model.to(self.config.device)
-            logger.info("ONION causal LM loaded successfully.")
+            target_device = "cuda" if (self.config.device == "auto" and torch.cuda.is_available()) or self.config.device == "cuda" else "cpu"
+            if target_device != "cpu":
+                self._model.to(target_device)
+            logger.info(f"ONION causal LM loaded successfully on device '{target_device}'.")
         except Exception as exc:
             logger.warning(
                 f"Failed to load causal LM ({self.config.language_model_name}): {exc}. "

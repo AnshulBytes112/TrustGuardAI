@@ -17,7 +17,7 @@ class TrainingConfig(BaseModel):
     weight_decay: float = Field(default=1e-4, ge=0.0, description="L2 weight regularization")
     seed: int = Field(default=42, description="Random seed for reproducibility")
     target_label: str = Field(default="POSITIVE", description="Target label for backdoor attack success rate (ASR) tracking")
-    device: str = Field(default="cpu", description="Compute device: cpu, cuda, or auto")
+    device: str = Field(default="auto", description="Compute device: cpu, cuda, or auto")
 
     model_config = ConfigDict(frozen=True)
 

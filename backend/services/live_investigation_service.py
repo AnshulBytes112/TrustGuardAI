@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, AsyncGenerator
 
 import numpy as np
+import torch
 
 from backend.schemas.live import (
     ConfusionMatrix,
@@ -340,11 +341,17 @@ class LiveInvestigationService:
                 progress_info={"processed_samples": 0, "total_samples": len(working_samples)},
             )
 
+            device_str = "cuda" if torch.cuda.is_available() else "cpu"
+            gpu_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "N/A"
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(req.seed)
+                torch.backends.cudnn.deterministic = True
+
             rep_cfg = RepresentationConfig(
                 model_name="distilbert-base-uncased",
                 max_length=64,
                 batch_size=32,
-                device="cpu",
+                device="auto",
                 layers=(1, 2, 3, 4, 5, 6),
                 use_cache=True,
             )

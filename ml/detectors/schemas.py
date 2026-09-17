@@ -35,7 +35,7 @@ class OnionDetectorConfig(BaseModel):
         default="all_words", description="Strategy for selecting candidate words to remove"
     )
     batch_size: int = Field(default=16, ge=1, description="Inference batch size")
-    device: str = Field(default="cpu", description="Compute device ('cpu' or 'cuda')")
+    device: str = Field(default="auto", description="Compute device ('cpu', 'cuda', or 'auto')")
     threshold: float = Field(default=0.0, description="Decision threshold on max perplexity drop")
     threshold_strategy: Literal["validation_calibrated", "fixed"] = Field(
         default="validation_calibrated", description="Threshold determination strategy"
