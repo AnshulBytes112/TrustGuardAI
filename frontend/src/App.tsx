@@ -1,181 +1,184 @@
 import { useState, useEffect, useCallback } from 'react';
-import type {
-  DatasetItem,
-  ScanItem,
-  OverviewStats,
-} from './api';
 import {
   fetchHealth,
-  fetchDatasets,
-  fetchScans,
-  fetchOverviewStats,
+  fetchSystemInfo,
+  fetchLiveJobs,
 } from './api';
-import { Sidebar } from './components/Sidebar';
-import { LiveInvestigationView } from './components/LiveInvestigationView';
-import { OverviewView } from './components/OverviewView';
-import { DatasetsView } from './components/DatasetsView';
-import { ScanView } from './components/ScanView';
-import { SuspiciousSamplesView } from './components/SuspiciousSamplesView';
-import { PurificationView } from './components/PurificationView';
-import { BenchmarkView } from './components/BenchmarkView';
-import { SampleInspectorModal } from './components/SampleInspectorModal';
+import type {
+  SystemInfo,
+  LiveJobSummary,
+} from './api';
+import { AppShell } from './components/layout/AppShell';
+import { DashboardView } from './components/operations/DashboardView';
+import { DatasetsView } from './components/operations/DatasetsView';
+import { NewInvestigationView } from './components/operations/NewInvestigationView';
+import { JobsHistoryView } from './components/operations/JobsHistoryView';
+import { LiveInvestigationView } from './components/research/LiveInvestigationView';
+import { SignalDiagnosticsView } from './components/research/SignalDiagnosticsView';
+import { ThresholdParetoView } from './components/research/ThresholdParetoView';
+import { AttackVariantsView } from './components/research/AttackVariantsView';
+import { CrossDatasetView } from './components/research/CrossDatasetView';
+import { GpuComputeView } from './components/system/GpuComputeView';
+import { ArtifactExplorerView } from './components/system/ArtifactExplorerView';
+import { SystemHealthView } from './components/system/SystemHealthView';
 import './index.css';
 
 export function App() {
-  const [activeView, setActiveView] = useState<string>('live');
-  const [, setSystemHealthy] = useState<boolean>(false);
-  const [datasets, setDatasets] = useState<DatasetItem[]>([]);
-  const [scans, setScans] = useState<ScanItem[]>([]);
-  const [, setStats] = useState<OverviewStats | null>(null);
-  const [inspectedSampleId, setInspectedSampleId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [investigationDatasetId, setInvestigationDatasetId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Cross-view state handoffs
-  const [preselectedDatasetId, setPreselectedDatasetId] = useState<string | null>(null);
-  const [preselectedScanId, setPreselectedScanId] = useState<string | null>(null);
-  const [benchmarkRawId, setBenchmarkRawId] = useState<string | null>(null);
-  const [benchmarkPurifiedId, setBenchmarkPurifiedId] = useState<string | null>(null);
+  // System & Health State
+  const [backendOnline, setBackendOnline] = useState<boolean>(true);
+  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
+  const [liveJobs, setLiveJobs] = useState<LiveJobSummary[]>([]);
 
-  const loadData = useCallback(async () => {
+  const loadGlobalSystemState = useCallback(async () => {
     try {
-      const [healthRes, datasetsRes, scansRes, statsRes] = await Promise.all([
-        fetchHealth().catch(() => ({ status: 'down' })),
-        fetchDatasets().catch(() => []),
-        fetchScans().catch(() => []),
-        fetchOverviewStats().catch(() => null),
+      const [healthRes, sysRes, jobsRes] = await Promise.allSettled([
+        fetchHealth(),
+        fetchSystemInfo(),
+        fetchLiveJobs(),
       ]);
-      setSystemHealthy(healthRes.status === 'ok' || healthRes.status === 'healthy');
-      setDatasets(datasetsRes);
-      setScans(scansRes);
-      if (statsRes) setStats(statsRes);
+
+      setBackendOnline(healthRes.status === 'fulfilled' && healthRes.value.status === 'ok');
+      if (sysRes.status === 'fulfilled') setSystemInfo(sysRes.value);
+      if (jobsRes.status === 'fulfilled') setLiveJobs(jobsRes.value);
     } catch (err) {
-      console.error('Failed loading system state:', err);
+      console.error('System state polling error', err);
+      setBackendOnline(false);
     }
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  // Active scan polling: if any scan is RUNNING or PENDING, poll every 2.5s
-  useEffect(() => {
-    const hasRunningScan = scans.some((s) => s.status === 'RUNNING' || s.status === 'PENDING');
-    if (!hasRunningScan) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const [updatedScans, updatedStats] = await Promise.all([
-          fetchScans(),
-          fetchOverviewStats().catch(() => null),
-        ]);
-        setScans(updatedScans);
-        if (updatedStats) setStats(updatedStats);
-      } catch (e) {
-        console.error('Polling error:', e);
-      }
-    }, 2500);
-
+    loadGlobalSystemState();
+    const interval = setInterval(loadGlobalSystemState, 5000);
     return () => clearInterval(interval);
-  }, [scans]);
+  }, [loadGlobalSystemState]);
 
-  const handleLaunchScanFromDataset = (datasetId: string) => {
-    setPreselectedDatasetId(datasetId);
-    setActiveView('scans');
+  const handleNavigate = (tabId: string, jobId?: string) => {
+    if (jobId) {
+      setSelectedJobId(jobId);
+      setActiveTab('live_pipeline');
+    } else {
+      setActiveTab(tabId);
+    }
   };
 
-  const handleViewScanSamples = (scanId: string) => {
-    setPreselectedScanId(scanId);
-    setActiveView('samples');
+  const handleLaunchInvestigationFromDataset = (datasetId: string) => {
+    setInvestigationDatasetId(datasetId);
+    setActiveTab('investigate_new');
   };
 
-  const handleNavigateToBenchmark = (rawDatasetId: string, purifiedDatasetId: string) => {
-    setBenchmarkRawId(rawDatasetId);
-    setBenchmarkPurifiedId(purifiedDatasetId);
-    setActiveView('benchmark');
+  const handleInvestigationStarted = (newJobId: string) => {
+    setSelectedJobId(newJobId);
+    loadGlobalSystemState();
+    setActiveTab('live_pipeline');
   };
 
-  const handleScanCreated = (newScan: ScanItem) => {
-    setScans((prev) => [newScan, ...prev]);
-    setActiveView('scans');
-  };
+  const activeJobCount = liveJobs.filter((j) => j.status === 'RUNNING' || j.status === 'CREATED').length;
+
+  // Determine which job to inspect in Live Pipeline view if none explicitly selected
+  const activeJobIdToInspect = selectedJobId || (liveJobs.length > 0 ? liveJobs[0].job_id : null);
 
   return (
-    <div className="app-layout">
-      {/* Navigation Sidebar */}
-      <Sidebar
-        currentView={activeView}
-        onSelectView={setActiveView}
-      />
-
-      {/* Main Content Area */}
-      <div className="main-content">
-        <main className="view-wrapper">
-          {activeView === 'live' && (
-            <LiveInvestigationView />
-          )}
-
-          {activeView === 'overview' && (
-            <OverviewView
-              datasets={datasets}
-              scans={scans}
-              onNavigate={setActiveView}
-            />
-          )}
-
-          {activeView === 'datasets' && (
-            <DatasetsView
-              datasets={datasets}
-              onRefresh={loadData}
-              onLaunchScan={handleLaunchScanFromDataset}
-              onInspectSample={setInspectedSampleId}
-            />
-          )}
-
-          {activeView === 'scans' && (
-            <ScanView
-              datasets={datasets}
-              scans={scans}
-              initialDatasetId={preselectedDatasetId}
-              onScanCreated={handleScanCreated}
-              onViewScanSamples={handleViewScanSamples}
-            />
-          )}
-
-          {activeView === 'samples' && (
-            <SuspiciousSamplesView
-              scans={scans}
-              initialScanId={preselectedScanId}
-              onInspectSample={setInspectedSampleId}
-              onSampleStateChanged={loadData}
-            />
-          )}
-
-          {activeView === 'purification' && (
-            <PurificationView
-              datasets={datasets}
-              onPurificationComplete={() => loadData()}
-              onNavigateToBenchmark={handleNavigateToBenchmark}
-            />
-          )}
-
-          {activeView === 'benchmark' && (
-            <BenchmarkView
-              datasets={datasets}
-              initialRawDatasetId={benchmarkRawId}
-              initialPurifiedDatasetId={benchmarkPurifiedId}
-            />
-          )}
-        </main>
-      </div>
-
-      {/* Deep Investigation XAI Modal */}
-      {inspectedSampleId && (
-        <SampleInspectorModal
-          sampleId={inspectedSampleId}
-          onClose={() => setInspectedSampleId(null)}
-          onSampleUpdated={loadData}
+    <AppShell
+      activeTab={activeTab}
+      onSelectTab={setActiveTab}
+      systemInfo={systemInfo}
+      backendOnline={backendOnline}
+      activeJobCount={activeJobCount}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
+    >
+      {/* 1. Dashboard View */}
+      {activeTab === 'dashboard' && (
+        <DashboardView
+          onNavigate={handleNavigate}
+          systemInfo={systemInfo}
         />
       )}
-    </div>
+
+      {/* 2. Dataset Studio */}
+      {activeTab === 'datasets' && (
+        <DatasetsView
+          onLaunchInvestigation={handleLaunchInvestigationFromDataset}
+          searchQuery={searchQuery}
+        />
+      )}
+
+      {/* 3. New Investigation Wizard */}
+      {activeTab === 'investigate_new' && (
+        <NewInvestigationView
+          initialDatasetId={investigationDatasetId}
+          onInvestigationStarted={handleInvestigationStarted}
+          onCancel={() => setActiveTab('dashboard')}
+        />
+      )}
+
+      {/* 4. Live Pipeline Console */}
+      {activeTab === 'live_pipeline' && (
+        activeJobIdToInspect ? (
+          <LiveInvestigationView
+            key={activeJobIdToInspect}
+            jobId={activeJobIdToInspect}
+            onBackToJobs={() => setActiveTab('jobs')}
+            onNewJob={() => setActiveTab('investigate_new')}
+          />
+        ) : (
+          <NewInvestigationView
+            initialDatasetId={investigationDatasetId}
+            onInvestigationStarted={handleInvestigationStarted}
+            onCancel={() => setActiveTab('dashboard')}
+          />
+        )
+      )}
+
+      {/* 5. Investigation Jobs History */}
+      {activeTab === 'jobs' && (
+        <JobsHistoryView
+          onInspectJob={(jId) => handleNavigate('live_pipeline', jId)}
+          onNewJob={() => setActiveTab('investigate_new')}
+          searchQuery={searchQuery}
+        />
+      )}
+
+      {/* 6. Signal Diagnostics */}
+      {activeTab === 'signal_diagnostics' && (
+        <SignalDiagnosticsView />
+      )}
+
+      {/* 7. Threshold & Pareto */}
+      {activeTab === 'threshold_pareto' && (
+        <ThresholdParetoView />
+      )}
+
+      {/* 8. Attack Variants */}
+      {activeTab === 'attack_variants' && (
+        <AttackVariantsView />
+      )}
+
+      {/* 9. Cross-Dataset Generalization */}
+      {activeTab === 'cross_dataset' && (
+        <CrossDatasetView />
+      )}
+
+      {/* 10. GPU & Compute */}
+      {activeTab === 'gpu_compute' && (
+        <GpuComputeView systemInfo={systemInfo} />
+      )}
+
+      {/* 11. Artifact Explorer */}
+      {activeTab === 'artifacts' && (
+        <ArtifactExplorerView />
+      )}
+
+      {/* 12. System Health */}
+      {activeTab === 'system_health' && (
+        <SystemHealthView />
+      )}
+    </AppShell>
   );
 }
 

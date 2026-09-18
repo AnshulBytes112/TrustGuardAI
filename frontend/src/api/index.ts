@@ -556,3 +556,60 @@ export function createLiveEventSource(
 
   return es;
 }
+
+// -------------------------------------------------------------
+// System Info & Compute Telemetry
+// -------------------------------------------------------------
+
+export interface SystemInfo {
+  gpu_available: boolean;
+  gpu_name: string;
+  cuda_version: string | null;
+  device_count: number;
+  vram_total_gb: number | null;
+  vram_allocated_gb: number | null;
+  vram_reserved_gb: number | null;
+  pytorch_version: string;
+  python_version: string;
+  os_name: string;
+  execution_device: string;
+  cpu_fallback_active: boolean;
+}
+
+export async function fetchSystemInfo(): Promise<SystemInfo> {
+  const res = await fetch(`${API_BASE}/stats/system-info`);
+  if (!res.ok) throw new Error('Failed to fetch system info');
+  return res.json();
+}
+
+// -------------------------------------------------------------
+// Empirical Research Artifacts & Benchmarks API
+// -------------------------------------------------------------
+
+export interface ResearchArtifactItem {
+  name: string;
+  relative_path: string;
+  category: string;
+  size_bytes: number;
+  file_type: string;
+  modified_at: string;
+}
+
+export async function fetchResearchArtifacts(): Promise<ResearchArtifactItem[]> {
+  const res = await fetch(`${API_BASE}/research/artifacts`);
+  if (!res.ok) throw new Error('Failed to fetch research artifacts');
+  return res.json();
+}
+
+export async function fetchResearchCategoryData(category: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/research/data/${category}`);
+  if (!res.ok) throw new Error(`Failed to fetch research data for category ${category}`);
+  return res.json();
+}
+
+export async function fetchResearchArtifactContent(filePath: string): Promise<string> {
+  const res = await fetch(`${API_BASE}/research/artifacts/view/${filePath}`);
+  if (!res.ok) throw new Error(`Failed to preview artifact ${filePath}`);
+  return res.text();
+}
+

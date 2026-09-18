@@ -11,6 +11,7 @@ from ml.models.classifier import TrainableDownstreamClassifier
 from ml.models.schemas import TrainingConfig
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available on this host")
 def test_cuda_device_detection():
     """Verify that CUDA is recognized and NVIDIA GPU is accessible."""
     assert torch.cuda.is_available(), "CUDA is not available in PyTorch"
@@ -20,6 +21,7 @@ def test_cuda_device_detection():
     print(f"CUDA Smoke Test: Detected {device_name} (VRAM: {torch.cuda.get_device_properties(0).total_memory / (1024**3):.2f} GB)")
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available on this host")
 def test_distilbert_gpu_vs_cpu_numerical_equivalence():
     """
     Verify numerical equivalence of DistilBERT representations between CPU and GPU.

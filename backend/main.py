@@ -7,6 +7,7 @@ from backend.api.datasets import router as datasets_router
 from backend.api.demo import router as demo_router
 from backend.api.live import router as live_router
 from backend.api.purification import router as purification_router
+from backend.api.research import router as research_router
 from backend.api.retraining import router as retraining_router
 from backend.api.samples import router as samples_router
 from backend.api.scans import router as scans_router
@@ -47,6 +48,8 @@ app.include_router(scans_router, prefix="/api")
 app.include_router(samples_router, prefix="/api")
 app.include_router(purification_router, prefix="/api")
 app.include_router(retraining_router, prefix="/api")
+app.include_router(research_router, prefix="/api")
+
 
 
 @app.get("/health")

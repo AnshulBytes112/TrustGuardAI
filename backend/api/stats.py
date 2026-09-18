@@ -96,3 +96,60 @@ def get_overview_stats(db: Session = Depends(get_db)):
         recent_scans=recent_scans,
         recent_datasets=recent_datasets,
     )
+
+
+class SystemInfoResponse(BaseModel):
+    gpu_available: bool
+    gpu_name: str
+    cuda_version: str | None
+    device_count: int
+    vram_total_gb: float | None
+    vram_allocated_gb: float | None
+    vram_reserved_gb: float | None
+    pytorch_version: str
+    python_version: str
+    os_name: str
+    execution_device: str
+    cpu_fallback_active: bool
+
+
+@router.get("/system-info", response_model=SystemInfoResponse)
+def get_system_info():
+    """Returns authoritative runtime hardware and GPU acceleration telemetry."""
+    import platform
+    import sys
+    import torch
+
+    cuda_available = torch.cuda.is_available()
+    gpu_name = torch.cuda.get_device_name(0) if cuda_available else "CPU (Fallback)"
+    cuda_version = torch.version.cuda if cuda_available else None
+    device_count = torch.cuda.device_count() if cuda_available else 0
+
+    vram_total_gb = None
+    vram_allocated_gb = None
+    vram_reserved_gb = None
+
+    if cuda_available:
+        try:
+            props = torch.cuda.get_device_properties(0)
+            vram_total_gb = round(props.total_memory / (1024**3), 2)
+            vram_allocated_gb = round(torch.cuda.memory_allocated(0) / (1024**3), 3)
+            vram_reserved_gb = round(torch.cuda.memory_reserved(0) / (1024**3), 3)
+        except Exception:
+            pass
+
+    return SystemInfoResponse(
+        gpu_available=cuda_available,
+        gpu_name=gpu_name,
+        cuda_version=cuda_version,
+        device_count=device_count,
+        vram_total_gb=vram_total_gb,
+        vram_allocated_gb=vram_allocated_gb,
+        vram_reserved_gb=vram_reserved_gb,
+        pytorch_version=torch.__version__,
+        python_version=sys.version.split()[0],
+        os_name=platform.platform(),
+        execution_device="cuda" if cuda_available else "cpu",
+        cpu_fallback_active=not cuda_available,
+    )
+
